@@ -5,12 +5,13 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import ThemeSwitcher from '@/components/ThemeSwitcher';
 import { useAuth } from '@/lib/AuthContext';
 import { logoutUser } from '@/lib/auth';
 import { getMatches, getAllUsers } from '@/lib/matches';
 import type { Match, LeaderboardUser } from '@/lib/matches';
 
-// ── helpers ──────────────────────────────────────────────────────────────────
+// ── helpers ───────────────────────────────────────────────────────────────────
 
 function isSameDay(a: Date, b: Date) {
   return (
@@ -21,8 +22,7 @@ function isSameDay(a: Date, b: Date) {
 }
 
 function formatMatchDate(ts: Match['matchDate']) {
-  const d = ts.toDate();
-  return d.toLocaleString('en-US', {
+  return ts.toDate().toLocaleString('en-US', {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -37,8 +37,8 @@ function StatusBadge({ status }: { status: Match['status'] }) {
   const styles: Record<Match['status'], string> = {
     live: 'bg-green-500/20 text-green-400',
     upcoming: 'bg-yellow-500/20 text-yellow-400',
-    completed: 'bg-slate-600/40 text-slate-400',
-    abandoned: 'bg-slate-600/40 text-slate-400',
+    completed: 'bg-slate-600/40 text-[var(--text-muted)]',
+    abandoned: 'bg-slate-600/40 text-[var(--text-muted)]',
   };
   return (
     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${styles[status]}`}>
@@ -49,7 +49,7 @@ function StatusBadge({ status }: { status: Match['status'] }) {
 
 function FormatBadge({ format }: { format: Match['format'] }) {
   return (
-    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">
+    <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-[var(--bg-input)] text-[var(--text-secondary)]">
       {format}
     </span>
   );
@@ -60,10 +60,10 @@ function MatchCard({ match }: { match: Match }) {
     (match.status === 'live' || match.status === 'upcoming') && match.bettingOpen;
 
   return (
-    <div className="bg-slate-800 rounded-xl p-5 flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <span className="font-semibold text-slate-100">
-          {match.teamA} <span className="text-slate-500">vs</span> {match.teamB}
+    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-[var(--card-padding)] flex flex-col gap-3">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <span className="font-semibold text-[var(--text-primary)]">
+          {match.teamA} <span className="text-[var(--text-muted)]">vs</span> {match.teamB}
         </span>
         <div className="flex items-center gap-2">
           <FormatBadge format={match.format} />
@@ -71,7 +71,7 @@ function MatchCard({ match }: { match: Match }) {
         </div>
       </div>
       <div className="flex items-center justify-between">
-        <span className="text-xs text-slate-500">{formatMatchDate(match.matchDate)}</span>
+        <span className="text-xs text-[var(--text-muted)]">{formatMatchDate(match.matchDate)}</span>
         {canBet && (
           <Link
             href={`/bet/${match.id}`}
@@ -87,7 +87,7 @@ function MatchCard({ match }: { match: Match }) {
 
 function EmptyCard({ message }: { message: string }) {
   return (
-    <div className="bg-slate-800 rounded-xl p-6 text-slate-500 text-sm text-center">
+    <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-[var(--card-padding)] text-[var(--text-muted)] text-sm text-center">
       {message}
     </div>
   );
@@ -116,7 +116,10 @@ function DashboardContent() {
   );
 
   const upcomingMatches = matches.filter(
-    (m) => m.status === 'upcoming' && m.matchDate.toDate() > today && !isSameDay(m.matchDate.toDate(), today)
+    (m) =>
+      m.status === 'upcoming' &&
+      m.matchDate.toDate() > today &&
+      !isSameDay(m.matchDate.toDate(), today)
   );
 
   const pastMatches = matches.filter(
@@ -133,12 +136,15 @@ function DashboardContent() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100">
+    <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
       {/* Navbar */}
-      <header className="bg-slate-800 border-b border-slate-700 px-6 py-4">
+      <header className="bg-[var(--bg-card)] border-b border-[var(--border)] px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <h1 className="text-xl font-bold text-green-500">🏆 WhoWin</h1>
-          <div className="flex items-center gap-4">
+
+          <div className="flex items-center gap-3">
+            <ThemeSwitcher />
+
             {userProfile && (
               <div className="flex items-center gap-2">
                 <div
@@ -147,12 +153,12 @@ function DashboardContent() {
                 >
                   {userProfile.displayName.charAt(0).toUpperCase()}
                 </div>
-                <span className="text-sm text-slate-300">{userProfile.displayName}</span>
+                <span className="text-sm text-[var(--text-secondary)]">{userProfile.displayName}</span>
               </div>
             )}
             <button
               onClick={handleLogout}
-              className="text-sm text-slate-400 hover:text-red-400 transition-colors"
+              className="text-sm text-[var(--text-secondary)] hover:text-red-400 transition-colors"
             >
               Sign out
             </button>
@@ -164,54 +170,48 @@ function DashboardContent() {
       <main className="max-w-5xl mx-auto px-6 py-8 space-y-8">
         {/* Live & Today */}
         <section>
-          <h2 className="text-lg font-semibold text-slate-100 mb-3">
+          <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-3">
             Live &amp; Today&apos;s Matches
           </h2>
           {todayMatches.length === 0 ? (
             <EmptyCard message="No matches today" />
           ) : (
             <div className="space-y-3">
-              {todayMatches.map((m) => (
-                <MatchCard key={m.id} match={m} />
-              ))}
+              {todayMatches.map((m) => <MatchCard key={m.id} match={m} />)}
             </div>
           )}
         </section>
 
         {/* Upcoming */}
         <section>
-          <h2 className="text-lg font-semibold text-slate-100 mb-3">Upcoming Matches</h2>
+          <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-3">Upcoming Matches</h2>
           {upcomingMatches.length === 0 ? (
             <EmptyCard message="No upcoming matches" />
           ) : (
             <div className="space-y-3">
-              {upcomingMatches.map((m) => (
-                <MatchCard key={m.id} match={m} />
-              ))}
+              {upcomingMatches.map((m) => <MatchCard key={m.id} match={m} />)}
             </div>
           )}
         </section>
 
         {/* Past */}
         <section>
-          <h2 className="text-lg font-semibold text-slate-100 mb-3">Past Matches</h2>
+          <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-3">Past Matches</h2>
           {pastMatches.length === 0 ? (
             <EmptyCard message="No past matches" />
           ) : (
             <div className="space-y-3">
-              {pastMatches.map((m) => (
-                <MatchCard key={m.id} match={m} />
-              ))}
+              {pastMatches.map((m) => <MatchCard key={m.id} match={m} />)}
             </div>
           )}
         </section>
 
         {/* Leaderboard */}
         <section>
-          <div className="bg-slate-800 rounded-xl p-6">
-            <h2 className="text-lg font-semibold text-slate-100 mb-4">Leaderboard</h2>
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-[var(--card-padding)]">
+            <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Leaderboard</h2>
             {users.length === 0 ? (
-              <p className="text-slate-500 text-sm text-center">No data</p>
+              <p className="text-[var(--text-muted)] text-sm text-center">No data</p>
             ) : (
               <ol className="space-y-2">
                 {users.map((u, i) => {
@@ -222,18 +222,18 @@ function DashboardContent() {
                       className={`flex items-center justify-between py-2 px-3 rounded-lg ${
                         isMe
                           ? 'bg-green-500/10 border border-green-500/30'
-                          : 'bg-slate-700'
+                          : 'bg-[var(--bg-input)]'
                       }`}
                     >
                       <div className="flex items-center gap-3">
-                        <span className="text-slate-400 text-sm w-5 text-right">{i + 1}</span>
+                        <span className="text-[var(--text-muted)] text-sm w-5 text-right">{i + 1}</span>
                         <div
                           className="w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-semibold shrink-0"
                           style={{ backgroundColor: u.avatarColor }}
                         >
                           {u.displayName.charAt(0).toUpperCase()}
                         </div>
-                        <span className="text-sm text-slate-200">{u.displayName}</span>
+                        <span className="text-sm text-[var(--text-primary)]">{u.displayName}</span>
                         {isMe && (
                           <span className="text-xs text-green-500 font-medium">(you)</span>
                         )}

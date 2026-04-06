@@ -20,6 +20,7 @@ import { logoutUser } from '@/lib/auth';
 import { getMatches } from '@/lib/matches';
 import type { Match, Bet } from '@/lib/matches';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import ThemeSwitcher from '@/components/ThemeSwitcher';
 
 // ── types ─────────────────────────────────────────────────────────────────────
 
@@ -41,7 +42,7 @@ function StatusBadge({ status }: { status: Match['status'] }) {
   const styles: Record<Match['status'], string> = {
     live: 'bg-green-500/20 text-green-400',
     upcoming: 'bg-yellow-500/20 text-yellow-400',
-    completed: 'bg-slate-600/40 text-slate-400',
+    completed: 'bg-slate-600/40 text-[var(--text-muted)]',
     abandoned: 'bg-red-500/20 text-red-400',
   };
   return (
@@ -50,6 +51,9 @@ function StatusBadge({ status }: { status: Match['status'] }) {
     </span>
   );
 }
+
+const INPUT_CLASS =
+  'w-full rounded-lg bg-[var(--bg-input)] border border-[var(--border)] px-4 py-2.5 text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent';
 
 // ── points settlement ─────────────────────────────────────────────────────────
 
@@ -61,7 +65,6 @@ async function settleMatch(match: Match, result: ResultOption) {
 
   const matchRef = doc(db, 'matches', match.id);
 
-  // ── abandoned: refund everyone ───────────────────────────────────────────
   if (result === 'abandoned') {
     await Promise.all(
       bets.map((b) =>
@@ -77,7 +80,6 @@ async function settleMatch(match: Match, result: ResultOption) {
     return;
   }
 
-  // ── draw with no draw bettors: apply noDrawPolicy ────────────────────────
   if (result === 'draw' && match.drawAllowed) {
     const drawBets = bets.filter((b) => b.pickedOutcome === 'draw');
     const otherBets = bets.filter((b) => b.pickedOutcome !== 'draw');
@@ -90,7 +92,6 @@ async function settleMatch(match: Match, result: ResultOption) {
           )
         );
       }
-      // rollover: leave bets as-is (pending), admin handles manually later
       await updateDoc(matchRef, {
         status: 'completed',
         result: 'draw',
@@ -100,7 +101,6 @@ async function settleMatch(match: Match, result: ResultOption) {
       return;
     }
 
-    // Normal draw settlement
     const losersStake = otherBets.reduce((s, b) => s + b.stake, 0);
     const winnerShare = drawBets.length > 0 ? Math.floor(losersStake / drawBets.length) : 0;
 
@@ -126,10 +126,8 @@ async function settleMatch(match: Match, result: ResultOption) {
     return;
   }
 
-  // ── normal win (team_a / team_b) ─────────────────────────────────────────
   const winnerBets = bets.filter((b) => b.pickedOutcome === result);
   const loserBets = bets.filter((b) => b.pickedOutcome !== result);
-
   const losersStake = loserBets.reduce((s, b) => s + b.stake, 0);
   const winnerShare = winnerBets.length > 0 ? Math.floor(losersStake / winnerBets.length) : 0;
 
@@ -160,7 +158,6 @@ function AdminContent() {
   const router = useRouter();
   const { userProfile } = useAuth();
 
-  // form state
   const [teamA, setTeamA] = useState('');
   const [teamB, setTeamB] = useState('');
   const [format, setFormat] = useState<Match['format']>('T20');
@@ -170,7 +167,6 @@ function AdminContent() {
   const [bettingOpen, setBettingOpen] = useState(true);
   const [creating, setCreating] = useState(false);
 
-  // match list state
   const [matches, setMatches] = useState<Match[]>([]);
   const [selectedResult, setSelectedResult] = useState<Record<string, ResultOption>>({});
   const [declaring, setDeclaring] = useState<Record<string, boolean>>({});
@@ -180,7 +176,6 @@ function AdminContent() {
     getMatches().then(setMatches).catch(() => toast.error('Failed to load matches'));
   }, []);
 
-  // Auto-set drawAllowed for Test format
   useEffect(() => {
     if (format === 'Test') setDrawAllowed(true);
     else setDrawAllowed(false);
@@ -218,12 +213,8 @@ function AdminContent() {
         cricApiMatchId: null,
       });
       toast.success('Match created!');
-      setTeamA('');
-      setTeamB('');
-      setFormat('T20');
-      setMatchDate('');
-      setDrawAllowed(false);
-      setBettingOpen(true);
+      setTeamA(''); setTeamB(''); setFormat('T20'); setMatchDate('');
+      setDrawAllowed(false); setBettingOpen(true);
       const updated = await getMatches();
       setMatches(updated);
     } catch (err) {
@@ -273,19 +264,20 @@ function AdminContent() {
 
   if (userProfile?.role !== 'admin') {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
         <p className="text-red-400 text-lg font-semibold">Access denied</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100">
+    <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
       {/* Navbar */}
-      <header className="bg-slate-800 border-b border-slate-700 px-6 py-4">
+      <header className="bg-[var(--bg-card)] border-b border-[var(--border)] px-6 py-4">
         <div className="max-w-4xl mx-auto flex items-center justify-between">
           <h1 className="text-xl font-bold text-green-500">🏆 WhoWin</h1>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <ThemeSwitcher />
             {userProfile && (
               <div className="flex items-center gap-2">
                 <div
@@ -294,12 +286,12 @@ function AdminContent() {
                 >
                   {userProfile.displayName.charAt(0).toUpperCase()}
                 </div>
-                <span className="text-sm text-slate-300">{userProfile.displayName}</span>
+                <span className="text-sm text-[var(--text-secondary)]">{userProfile.displayName}</span>
               </div>
             )}
             <button
               onClick={handleLogout}
-              className="text-sm text-slate-400 hover:text-red-400 transition-colors"
+              className="text-sm text-[var(--text-secondary)] hover:text-red-400 transition-colors"
             >
               Sign out
             </button>
@@ -310,41 +302,41 @@ function AdminContent() {
       <main className="max-w-4xl mx-auto px-6 py-8 space-y-10">
         {/* ── Create Match form ── */}
         <section>
-          <h2 className="text-lg font-semibold text-slate-100 mb-4">Create Match</h2>
-          <div className="bg-slate-800 rounded-xl p-6">
+          <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4">Create Match</h2>
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-[var(--card-padding)]">
             <form onSubmit={handleCreateMatch} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Team A</label>
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Team A</label>
                   <input
                     type="text"
                     required
                     value={teamA}
                     onChange={(e) => setTeamA(e.target.value)}
                     placeholder="e.g. India"
-                    className="w-full rounded-lg bg-slate-700 border border-slate-600 px-4 py-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    className={INPUT_CLASS}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Team B</label>
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Team B</label>
                   <input
                     type="text"
                     required
                     value={teamB}
                     onChange={(e) => setTeamB(e.target.value)}
                     placeholder="e.g. Australia"
-                    className="w-full rounded-lg bg-slate-700 border border-slate-600 px-4 py-2.5 text-slate-100 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    className={INPUT_CLASS}
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Format</label>
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Format</label>
                   <select
                     value={format}
                     onChange={(e) => setFormat(e.target.value as Match['format'])}
-                    className="w-full rounded-lg bg-slate-700 border border-slate-600 px-4 py-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    className={INPUT_CLASS}
                   >
                     <option value="T20">T20</option>
                     <option value="ODI">ODI</option>
@@ -352,13 +344,13 @@ function AdminContent() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Match Date & Time</label>
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Match Date &amp; Time</label>
                   <input
                     type="datetime-local"
                     required
                     value={matchDate}
                     onChange={(e) => setMatchDate(e.target.value)}
-                    className="w-full rounded-lg bg-slate-700 border border-slate-600 px-4 py-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    className={INPUT_CLASS}
                   />
                 </div>
               </div>
@@ -372,10 +364,10 @@ function AdminContent() {
                     onChange={(e) => setDrawAllowed(e.target.checked)}
                     className="w-4 h-4 accent-green-500"
                   />
-                  <span className="text-sm text-slate-300">
+                  <span className="text-sm text-[var(--text-secondary)]">
                     Allow Draw
                     {format === 'Test' && (
-                      <span className="ml-1 text-xs text-slate-500">(auto for Test)</span>
+                      <span className="ml-1 text-xs text-[var(--text-muted)]">(auto for Test)</span>
                     )}
                   </span>
                 </label>
@@ -387,19 +379,19 @@ function AdminContent() {
                     onChange={(e) => setBettingOpen(e.target.checked)}
                     className="w-4 h-4 accent-green-500"
                   />
-                  <span className="text-sm text-slate-300">Betting Open</span>
+                  <span className="text-sm text-[var(--text-secondary)]">Betting Open</span>
                 </label>
               </div>
 
               {drawAllowed && (
                 <div className="max-w-xs">
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">
                     No Draw Policy
                   </label>
                   <select
                     value={noDrawPolicy}
                     onChange={(e) => setNoDrawPolicy(e.target.value as Match['noDrawPolicy'])}
-                    className="w-full rounded-lg bg-slate-700 border border-slate-600 px-4 py-2.5 text-slate-100 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    className={INPUT_CLASS}
                   >
                     <option value="refund">Refund all</option>
                     <option value="rollover">Rollover</option>
@@ -430,9 +422,9 @@ function AdminContent() {
 
         {/* ── Match list ── */}
         <section>
-          <h2 className="text-lg font-semibold text-slate-100 mb-4">All Matches</h2>
+          <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4">All Matches</h2>
           {matches.length === 0 ? (
-            <div className="bg-slate-800 rounded-xl p-6 text-slate-500 text-sm text-center">
+            <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-[var(--card-padding)] text-[var(--text-muted)] text-sm text-center">
               No matches yet
             </div>
           ) : (
@@ -440,25 +432,22 @@ function AdminContent() {
               {matches.map((match) => {
                 const canDeclare = match.status === 'upcoming' || match.status === 'live';
                 return (
-                  <div key={match.id} className="bg-slate-800 rounded-xl p-5 space-y-4">
-                    {/* Header row */}
+                  <div key={match.id} className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-[var(--card-padding)] space-y-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div>
-                        <span className="font-semibold text-slate-100">
-                          {match.teamA} <span className="text-slate-500">vs</span> {match.teamB}
+                        <span className="font-semibold text-[var(--text-primary)]">
+                          {match.teamA} <span className="text-[var(--text-muted)]">vs</span> {match.teamB}
                         </span>
-                        <span className="ml-2 text-xs font-medium px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">
+                        <span className="ml-2 text-xs font-medium px-2 py-0.5 rounded-full bg-[var(--bg-input)] text-[var(--text-secondary)]">
                           {match.format}
                         </span>
                       </div>
                       <StatusBadge status={match.status} />
                     </div>
 
-                    <p className="text-xs text-slate-500">{formatMatchDate(match.matchDate)}</p>
+                    <p className="text-xs text-[var(--text-muted)]">{formatMatchDate(match.matchDate)}</p>
 
-                    {/* Actions */}
                     <div className="flex flex-wrap items-center gap-3 pt-1">
-                      {/* Toggle betting */}
                       {canDeclare && (
                         <button
                           onClick={() => handleToggleBetting(match)}
@@ -466,14 +455,13 @@ function AdminContent() {
                           className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 ${
                             match.bettingOpen
                               ? 'bg-yellow-500/20 text-yellow-400 hover:bg-yellow-500/30'
-                              : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                              : 'bg-[var(--bg-input)] text-[var(--text-secondary)] hover:bg-[var(--bg-hover)]'
                           }`}
                         >
                           {match.bettingOpen ? 'Close Betting' : 'Open Betting'}
                         </button>
                       )}
 
-                      {/* Declare result */}
                       {canDeclare && (
                         <div className="flex items-center gap-2 flex-wrap">
                           <select
@@ -484,11 +472,9 @@ function AdminContent() {
                                 [match.id]: e.target.value as ResultOption,
                               }))
                             }
-                            className="rounded-lg bg-slate-700 border border-slate-600 px-3 py-1.5 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                            className="rounded-lg bg-[var(--bg-input)] border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
                           >
-                            <option value="" disabled>
-                              Declare result…
-                            </option>
+                            <option value="" disabled>Declare result…</option>
                             <option value="team_a">{match.teamA} wins</option>
                             <option value="team_b">{match.teamB} wins</option>
                             {match.drawAllowed && <option value="draw">Draw</option>}
@@ -505,7 +491,7 @@ function AdminContent() {
                       )}
 
                       {!canDeclare && (
-                        <span className="text-xs text-slate-500 italic">
+                        <span className="text-xs text-[var(--text-muted)] italic">
                           Result: {match.result}
                         </span>
                       )}

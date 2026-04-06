@@ -29,8 +29,8 @@ function StatusBadge({ status }: { status: Match['status'] }) {
   const styles: Record<Match['status'], string> = {
     live: 'bg-green-500/20 text-green-400',
     upcoming: 'bg-yellow-500/20 text-yellow-400',
-    completed: 'bg-slate-600/40 text-slate-400',
-    abandoned: 'bg-slate-600/40 text-slate-400',
+    completed: 'bg-slate-600/40 text-[var(--text-muted)]',
+    abandoned: 'bg-slate-600/40 text-[var(--text-muted)]',
   };
   return (
     <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${styles[status]}`}>
@@ -43,7 +43,7 @@ function BackButton() {
   return (
     <Link
       href="/dashboard"
-      className="inline-flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-200 transition-colors"
+      className="inline-flex items-center gap-1.5 text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -62,8 +62,8 @@ function BackButton() {
 
 function InfoCard({ message }: { message: string }) {
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center gap-4 px-4">
-      <p className="text-slate-300 text-base">{message}</p>
+    <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col items-center justify-center gap-4 px-4">
+      <p className="text-[var(--text-secondary)] text-base">{message}</p>
       <BackButton />
     </div>
   );
@@ -92,7 +92,7 @@ function OutcomeButton({
       className={`flex-1 rounded-xl py-4 px-3 font-semibold text-sm transition-all border-2 ${
         isSelected
           ? `${accentClass} border-current shadow-lg scale-[1.02]`
-          : 'bg-slate-700 text-slate-300 border-transparent hover:bg-slate-600'
+          : 'bg-[var(--bg-input)] text-[var(--text-secondary)] border-transparent hover:bg-[var(--bg-hover)]'
       }`}
     >
       {label}
@@ -145,10 +145,9 @@ function BetContent() {
     }
   }
 
-  // Loading
   if (match === undefined || existingBet === undefined) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
         <svg className="animate-spin h-10 w-10 text-green-500" fill="none" viewBox="0 0 24 24">
           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
@@ -174,13 +173,13 @@ function BetContent() {
       draw: 'Draw',
     };
     return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center gap-4 px-4">
-        <div className="bg-slate-800 rounded-xl p-8 max-w-sm w-full text-center space-y-3">
+      <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col items-center justify-center gap-4 px-4">
+        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-8 max-w-sm w-full text-center space-y-3">
           <div className="text-green-400 text-4xl">✓</div>
-          <h2 className="text-lg font-semibold text-slate-100">Your bet has been placed!</h2>
-          <p className="text-slate-400 text-sm">
+          <h2 className="text-lg font-semibold text-[var(--text-primary)]">Your bet has been placed!</h2>
+          <p className="text-[var(--text-secondary)] text-sm">
             You picked{' '}
-            <span className="text-slate-100 font-medium">
+            <span className="text-[var(--text-primary)] font-medium">
               {outcomeLabel[existingBet.pickedOutcome as Outcome]}
             </span>{' '}
             with a stake of{' '}
@@ -193,27 +192,27 @@ function BetContent() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100">
+    <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
       <div className="max-w-lg mx-auto px-6 py-8 space-y-6">
         <BackButton />
 
         {/* Match info */}
-        <div className="bg-slate-800 rounded-xl p-6 space-y-3">
+        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-[var(--card-padding)] space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <h1 className="text-xl font-bold text-slate-100">
-              {match.teamA} <span className="text-slate-500">vs</span> {match.teamB}
+            <h1 className="text-xl font-bold text-[var(--text-primary)]">
+              {match.teamA} <span className="text-[var(--text-muted)]">vs</span> {match.teamB}
             </h1>
             <div className="flex items-center gap-2">
-              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-700 text-slate-300">
+              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-[var(--bg-input)] text-[var(--text-secondary)]">
                 {match.format}
               </span>
               <StatusBadge status={match.status} />
             </div>
           </div>
-          <p className="text-xs text-slate-500">{formatMatchDate(match.matchDate)}</p>
+          <p className="text-xs text-[var(--text-muted)]">{formatMatchDate(match.matchDate)}</p>
 
-          <div className="pt-1 border-t border-slate-700">
-            <p className="text-sm text-slate-400">
+          <div className="pt-1 border-t border-[var(--border)]">
+            <p className="text-sm text-[var(--text-secondary)]">
               Stake:{' '}
               <span className="text-green-400 font-semibold">{STAKE} pts</span>
             </p>
@@ -222,7 +221,7 @@ function BetContent() {
 
         {/* Outcome picker */}
         <div className="space-y-3">
-          <p className="text-sm font-medium text-slate-300">Pick your outcome</p>
+          <p className="text-sm font-medium text-[var(--text-secondary)]">Pick your outcome</p>
           <div className="flex gap-3">
             <OutcomeButton
               label={match.teamA}
@@ -236,7 +235,7 @@ function BetContent() {
                 label="Draw"
                 value="draw"
                 selected={selected}
-                accentClass="bg-slate-500/40 text-slate-200"
+                accentClass="bg-slate-500/40 text-[var(--text-primary)]"
                 onClick={() => setSelected('draw')}
               />
             )}
@@ -250,7 +249,6 @@ function BetContent() {
           </div>
         </div>
 
-        {/* Confirm */}
         {selected && (
           <button
             onClick={handleConfirm}

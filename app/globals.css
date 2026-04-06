@@ -1,10 +1,6 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
+/* ── Font theme tokens ───────────────────────────────────────────────────── */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -12,15 +8,69 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ── Dark theme (default) ────────────────────────────────────────────────── */
+[data-theme="dark"],
+[data-theme="dark-compact"] {
+  --bg-primary:   #0f172a;
+  --bg-card:      #1e293b;
+  --bg-input:     #334155;
+  --bg-hover:     #475569;
+  --text-primary:   #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted:     #64748b;
+  --border:       #334155;
+  --card-padding: 1.5rem;
+}
+
+/* ── Light theme ─────────────────────────────────────────────────────────── */
+[data-theme="light"],
+[data-theme="light-compact"] {
+  --bg-primary:   #f8fafc;
+  --bg-card:      #ffffff;
+  --bg-input:     #f1f5f9;
+  --bg-hover:     #e2e8f0;
+  --text-primary:   #0f172a;
+  --text-secondary: #475569;
+  --text-muted:     #94a3b8;
+  --border:       #e2e8f0;
+  --card-padding: 1.5rem;
+}
+
+/* ── Compact overrides ───────────────────────────────────────────────────── */
+[data-theme="dark-compact"],
+[data-theme="light-compact"] {
+  --card-padding: 0.75rem;
+  font-size: 0.875rem;
+}
+
+/* ── Base ────────────────────────────────────────────────────────────────── */
+html {
+  background-color: var(--bg-primary, #0f172a);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* ── Select options follow theme ─────────────────────────────────────────── */
+select option {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+}
+
+/* ── Scrollbar (dark themes) ─────────────────────────────────────────────── */
+[data-theme="dark"] ::-webkit-scrollbar,
+[data-theme="dark-compact"] ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+[data-theme="dark"] ::-webkit-scrollbar-track,
+[data-theme="dark-compact"] ::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb,
+[data-theme="dark-compact"] ::-webkit-scrollbar-thumb {
+  background: var(--bg-hover);
+  border-radius: 3px;
 }
