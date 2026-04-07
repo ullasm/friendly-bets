@@ -10,6 +10,8 @@ import { useAuth } from '@/lib/AuthContext';
 import { logoutUser } from '@/lib/auth';
 import { getMatches, getAllUsers } from '@/lib/matches';
 import type { Match, LeaderboardUser } from '@/lib/matches';
+import { getCricketMatches, filterIPLMatches } from '@/lib/cricapi';
+import type { CricMatch } from '@/lib/cricapi';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -101,10 +103,15 @@ function DashboardContent() {
 
   const [matches, setMatches] = useState<Match[]>([]);
   const [users, setUsers] = useState<LeaderboardUser[]>([]);
+  const [liveIPL, setLiveIPL] = useState<CricMatch[]>([]);
 
   useEffect(() => {
     getMatches().then(setMatches).catch(() => toast.error('Failed to load matches'));
     getAllUsers().then(setUsers).catch(() => toast.error('Failed to load leaderboard'));
+    // Fail silently — CricAPI is optional
+    getCricketMatches()
+      .then((all) => setLiveIPL(filterIPLMatches(all).filter((m) => m.isLive)))
+      .catch(() => {});
   }, []);
 
   const today = new Date();
@@ -168,6 +175,44 @@ function DashboardContent() {
 
       {/* Content */}
       <main className="max-w-5xl mx-auto px-6 py-8 space-y-8">
+        {/* Live Cricket (CricAPI) */}
+        {liveIPL.length > 0 && (
+          <section>
+            <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-3 flex items-center gap-2">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
+              </span>
+              Live Cricket
+            </h2>
+            <div className="space-y-3">
+              {liveIPL.map((m) => (
+                <div
+                  key={m.id}
+                  className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-[var(--card-padding)] space-y-2"
+                >
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <span className="font-semibold text-[var(--text-primary)] text-sm">
+                      {m.teams.join(' vs ')}
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+                      </span>
+                      <span className="text-xs font-medium text-red-400">LIVE</span>
+                    </div>
+                  </div>
+                  {m.score && (
+                    <p className="text-xs text-green-400 font-medium">{m.score}</p>
+                  )}
+                  <p className="text-xs text-[var(--text-muted)]">{m.status}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Live & Today */}
         <section>
           <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-3">
