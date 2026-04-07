@@ -37,7 +37,13 @@ service cloud.firestore {
 
       // Members subcollection
       match /members/{memberId} {
-        allow read: if isGroupMember(groupId);
+        // Allow users to check whether they already have a membership doc while
+        // still keeping full member listings scoped to existing group members.
+        allow get: if isSignedIn() && (
+          request.auth.uid == memberId ||
+          isGroupMember(groupId)
+        );
+        allow list: if isGroupMember(groupId);
         allow create: if isSignedIn() && request.auth.uid == memberId;
         allow update: if isGroupAdmin(groupId);
         allow delete: if isGroupAdmin(groupId);
