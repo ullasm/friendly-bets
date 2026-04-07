@@ -20,6 +20,12 @@
   --text-muted:     #64748b;
   --border:       #334155;
   --card-padding: 1.5rem;
+  --accent-solid: #2E86C1;
+  --accent-hover: #2874A6;
+  --accent-text: #5DADE2;
+  --accent-soft: rgba(46, 134, 193, 0.10);
+  --accent-soft-strong: rgba(46, 134, 193, 0.20);
+  --accent-border-soft: rgba(46, 134, 193, 0.30);
 }
 
 /* ── Light theme ─────────────────────────────────────────────────────────── */
@@ -34,6 +40,12 @@
   --text-muted:     #94a3b8;
   --border:       #e2e8f0;
   --card-padding: 1.5rem;
+  --accent-solid: #2E86C1;
+  --accent-hover: #2874A6;
+  --accent-text: #2E86C1;
+  --accent-soft: rgba(46, 134, 193, 0.10);
+  --accent-soft-strong: rgba(46, 134, 193, 0.18);
+  --accent-border-soft: rgba(46, 134, 193, 0.28);
 }
 
 /* ── Compact overrides ───────────────────────────────────────────────────── */
@@ -51,6 +63,48 @@ html {
 body {
   background-color: var(--bg-primary);
   color: var(--text-primary);
+}
+
+/* ── Accent overrides ─────────────────────────────────────────────────────── */
+.text-green-500,
+.hover\:text-green-400:hover,
+.focus\:text-green-400:focus {
+  color: var(--accent-solid);
+}
+
+.text-green-400 {
+  color: var(--accent-text);
+}
+
+.bg-green-500 {
+  background-color: var(--accent-solid);
+}
+
+.hover\:bg-green-600:hover {
+  background-color: var(--accent-hover);
+}
+
+.hover\:bg-green-500\/30:hover,
+.bg-green-500\/20 {
+  background-color: var(--accent-soft-strong);
+}
+
+.bg-green-500\/10,
+.hover\:bg-green-500\/20:hover {
+  background-color: var(--accent-soft);
+}
+
+.border-green-500\/30,
+.border-green-500\/20 {
+  border-color: var(--accent-border-soft);
+}
+
+.focus\:ring-green-500:focus {
+  --tw-ring-color: var(--accent-solid);
+}
+
+.accent-green-500 {
+  accent-color: var(--accent-solid);
 }
 
 /* ── Select options follow theme ─────────────────────────────────────────── */
