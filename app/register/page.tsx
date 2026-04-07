@@ -52,7 +52,7 @@ function RegisterForm() {
     setSubmitting(true);
     try {
       await registerUser(email, password, displayName);
-      toast.success('Account created! Welcome to WhoWin!');
+      toast.success('Account created! Welcome to WhoWins!');
       router.replace(redirectTo);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to create account');
@@ -80,7 +80,7 @@ function RegisterForm() {
     <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center px-4">
       <div className="w-full max-w-md bg-[var(--bg-card)] rounded-2xl p-8 shadow-xl border border-[var(--border)]">
         <div className="mb-6 text-center">
-          <h1 className="text-3xl font-bold text-green-500">🏆 WhoWin</h1>
+          <h1 className="text-3xl font-bold text-green-500">🏆 WhoWins</h1>
           <p className="mt-2 text-[var(--text-secondary)] text-sm">Create your account</p>
         </div>
 

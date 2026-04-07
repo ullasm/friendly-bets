@@ -56,7 +56,7 @@ function CreateGroupContent() {
       {/* Navbar */}
       <header className="bg-[var(--bg-card)] border-b border-[var(--border)] px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <h1 className="text-xl font-bold text-green-500">🏆 WhoWin</h1>
+          <h1 className="text-xl font-bold text-green-500">🏆 WhoWins</h1>
           <div className="flex items-center gap-3">
             <ThemeSwitcher />
             {userProfile && (

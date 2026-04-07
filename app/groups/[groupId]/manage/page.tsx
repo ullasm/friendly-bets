@@ -105,7 +105,7 @@ function ManageContent() {
   }
 
   async function copyInviteLink() {
-    await navigator.clipboard.writeText(`https://whowin.live/join/${inviteCode}`);
+    await navigator.clipboard.writeText(`https://whowins.live/join/${inviteCode}`);
     toast.success('Copied!');
   }
 
@@ -190,7 +190,7 @@ function ManageContent() {
     );
   }
 
-  const inviteLink = `https://whowin.live/join/${inviteCode}`;
+  const inviteLink = `https://whowins.live/join/${inviteCode}`;
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
@@ -235,7 +235,7 @@ function ManageContent() {
               </svg>
             </Link>
             <div className="min-w-0">
-              <span className="text-base font-bold text-green-500 block">🏆 WhoWin</span>
+              <span className="text-base font-bold text-green-500 block">🏆 WhoWins</span>
               {group && (
                 <span className="text-xs text-[var(--text-secondary)] truncate block">
                   {group.name} · Settings
@@ -337,7 +337,7 @@ function ManageContent() {
 
           <div className="flex flex-wrap gap-3">
             <a
-              href={`https://wa.me/?text=${encodeURIComponent(`Join my WhoWin group! Click here: ${inviteLink}`)}`}
+              href={`https://wa.me/?text=${encodeURIComponent(`Join my WhoWins group! Click here: ${inviteLink}`)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-2 rounded-lg bg-[#25D366] hover:bg-[#1ebe5d] text-white font-semibold text-sm px-4 py-2 transition-colors"

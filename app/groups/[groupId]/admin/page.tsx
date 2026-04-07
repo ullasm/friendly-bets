@@ -218,7 +218,7 @@ function GroupAdminContent() {
               </svg>
             </Link>
             <div className="min-w-0">
-              <span className="text-base font-bold text-green-500 block">🏆 WhoWin</span>
+              <span className="text-base font-bold text-green-500 block">🏆 WhoWins</span>
               {group && (
                 <span className="text-xs text-[var(--text-secondary)] truncate block">{group.name} · Admin</span>
               )}

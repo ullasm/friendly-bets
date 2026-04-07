@@ -132,7 +132,7 @@ function GroupDashboardContent() {
 
   async function copyInviteLink() {
     if (!group) return;
-    const link = `https://whowin.live/join/${group.inviteCode}`;
+    const link = `https://whowins.live/join/${group.inviteCode}`;
     await navigator.clipboard.writeText(link);
     toast.success('Link copied!');
   }
@@ -163,7 +163,7 @@ function GroupDashboardContent() {
 
   const isAdmin = myMember?.role === 'admin';
   const today = new Date();
-  const inviteLink = group ? `https://whowin.live/join/${group.inviteCode}` : '';
+  const inviteLink = group ? `https://whowins.live/join/${group.inviteCode}` : '';
 
   const todayMatches = matches.filter(
     (m) =>
@@ -197,7 +197,7 @@ function GroupDashboardContent() {
               </svg>
             </Link>
             <div className="min-w-0">
-              <span className="text-base font-bold text-green-500 truncate block">🏆 WhoWin</span>
+              <span className="text-base font-bold text-green-500 truncate block">🏆 WhoWins</span>
               {group && (
                 <span className="text-xs text-[var(--text-secondary)] truncate block">{group.name}</span>
               )}
@@ -351,7 +351,7 @@ function GroupDashboardContent() {
               </button>
             </div>
             <a
-              href={`https://wa.me/?text=${encodeURIComponent(`Join my WhoWin group! Click here: ${inviteLink}`)}`}
+              href={`https://wa.me/?text=${encodeURIComponent(`Join my WhoWins group! Click here: ${inviteLink}`)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 w-full rounded-lg bg-[#25D366] hover:bg-[#1ebe5d] text-white font-semibold text-sm px-4 py-2.5 transition-colors"
