@@ -1,4 +1,4 @@
-export const revalidate = 300; // cache for 5 minutes
+export const revalidate = 60; // cache for 1 minute
 
 export interface CricMatch {
   id: string;
@@ -50,30 +50,56 @@ export async function GET() {
   }
 
   try {
-    const [liveRes, upcomingRes] = await Promise.all([
+    const [liveRes, upcomingRes, upcomingRes2] = await Promise.all([
       fetch(`https://api.cricapi.com/v1/currentMatches?apikey=${API_KEY}&offset=0`, {
-        next: { revalidate: 300 },
+        next: { revalidate: 60 },
       }),
       fetch(`https://api.cricapi.com/v1/matches?apikey=${API_KEY}&offset=0`, {
-        next: { revalidate: 300 },
+        next: { revalidate: 60 },
+      }),
+      fetch(`https://api.cricapi.com/v1/matches?apikey=${API_KEY}&offset=25`, {
+        next: { revalidate: 60 },
       }),
     ]);
 
-    const [liveJson, upcomingJson] = await Promise.all([
+    const [liveJson, upcomingJson, upcomingJson2] = await Promise.all([
       liveRes.ok ? liveRes.json() : Promise.resolve({ data: [] }),
       upcomingRes.ok ? upcomingRes.json() : Promise.resolve({ data: [] }),
+      upcomingRes2.ok ? upcomingRes2.json() : Promise.resolve({ data: [] }),
     ]);
 
     const liveMatches: CricMatch[] = (liveJson.data ?? []).map((m: unknown) => normalise(m, true));
-    const upcomingMatches: CricMatch[] = (upcomingJson.data ?? []).map((m: unknown) => normalise(m, false));
+    const upcomingRaw = [
+      ...(upcomingJson.data ?? []),
+      ...(upcomingJson2.data ?? []),
+    ].map((m: unknown) => normalise(m, false));
 
-    // De-duplicate: upcoming list may overlap with live
-    const liveIds = new Set(liveMatches.map((m) => m.id));
-    const deduped = upcomingMatches.filter((m) => !liveIds.has(m.id));
+    // De-duplicate across live + both upcoming pages
+    const seen = new Set<string>(liveMatches.map((m) => m.id));
+    const dedupedUpcoming = upcomingRaw.filter((m) => {
+      if (seen.has(m.id)) return false;
+      seen.add(m.id);
+      return true;
+    });
 
-    const matches = [...liveMatches, ...deduped];
+    // Filter out matches more than 24 hours in the past
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    const all = [...liveMatches, ...dedupedUpcoming].filter((m) => {
+      const t = new Date(m.dateTimeLocal || m.date).getTime();
+      return isNaN(t) || t >= cutoff;
+    });
 
-    return Response.json({ matches });
+    // Sort by date ascending so upcoming matches appear first
+    all.sort((a, b) => {
+      const da = new Date(a.dateTimeLocal || a.date).getTime();
+      const db = new Date(b.dateTimeLocal || b.date).getTime();
+      if (isNaN(da) && isNaN(db)) return 0;
+      if (isNaN(da)) return 1;
+      if (isNaN(db)) return -1;
+      return da - db;
+    });
+
+    return Response.json({ matches: all });
   } catch {
     return Response.json({ matches: [] });
   }

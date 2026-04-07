@@ -149,6 +149,16 @@ function GroupAdminContent() {
     setCricFetched(true);
     try {
       const mats = await getCricketMatches();
+      // Live matches first, then upcoming sorted by date ascending
+      mats.sort((a, b) => {
+        if (a.isLive !== b.isLive) return a.isLive ? -1 : 1;
+        const da = new Date(a.dateTimeLocal || a.date).getTime();
+        const db = new Date(b.dateTimeLocal || b.date).getTime();
+        if (isNaN(da) && isNaN(db)) return 0;
+        if (isNaN(da)) return 1;
+        if (isNaN(db)) return -1;
+        return da - db;
+      });
       setCricMatches(mats);
     } catch {
       setCricMatches([]);

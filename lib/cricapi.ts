@@ -2,12 +2,14 @@ import type { CricMatch } from '@/app/api/cricket/route';
 
 export type { CricMatch };
 
-const IPL_TEAMS = new Set([
-  'MI', 'CSK', 'RCB', 'KKR', 'SRH', 'RR', 'DC', 'PBKS', 'GT', 'LSG',
-  'Mumbai Indians', 'Chennai Super Kings', 'Royal Challengers Bangalore',
-  'Royal Challengers Bengaluru', 'Kolkata Knight Riders', 'Sunrisers Hyderabad',
-  'Rajasthan Royals', 'Delhi Capitals', 'Punjab Kings', 'Gujarat Titans',
-  'Lucknow Super Giants',
+// Lowercase set for case-insensitive matching
+const IPL_TEAM_NAMES = new Set([
+  'mi', 'csk', 'rcb', 'kkr', 'srh', 'rr', 'dc', 'pbks', 'gt', 'lsg',
+  'mumbai indians', 'chennai super kings',
+  'royal challengers bangalore', 'royal challengers bengaluru',
+  'kolkata knight riders', 'sunrisers hyderabad',
+  'rajasthan royals', 'delhi capitals', 'punjab kings',
+  'gujarat titans', 'lucknow super giants',
 ]);
 
 export async function getCricketMatches(): Promise<CricMatch[]> {
@@ -17,9 +19,12 @@ export async function getCricketMatches(): Promise<CricMatch[]> {
   return json.matches ?? [];
 }
 
+// Used by dashboard live scores — keeps only IPL matches.
+// Case-insensitive to handle API name variations.
 export function filterIPLMatches(matches: CricMatch[]): CricMatch[] {
   return matches.filter((m) => {
-    if (m.name.includes('IPL')) return true;
-    return m.teams.some((t) => IPL_TEAMS.has(t));
+    const nameLower = m.name.toLowerCase();
+    if (nameLower.includes('ipl') || nameLower.includes('indian premier league')) return true;
+    return m.teams.some((t) => IPL_TEAM_NAMES.has(t.toLowerCase()));
   });
 }
