@@ -25,8 +25,12 @@ service cloud.firestore {
     }
 
     // Groups collection
+    // get  — single-document read requires membership
+    // list — collection queries (invite-code lookup, uniqueness check) need
+    //         only a valid sign-in so createGroup / joinGroup flows work
     match /groups/{groupId} {
-      allow read: if isGroupMember(groupId);
+      allow get: if isGroupMember(groupId);
+      allow list: if isSignedIn();
       allow create: if isSignedIn();
       allow update: if isGroupAdmin(groupId);
       allow delete: if false;
