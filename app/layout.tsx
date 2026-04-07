@@ -16,17 +16,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: {
-    default: "WhoWins - Friendly Bets, Real Bragging Rights",
-    template: "%s | WhoWins",
-  },
-  description: "Make friendly bets with friends and find out who wins. No money, just glory.",
-  keywords: ["bet", "friends", "prediction", "who wins", "friendly wager"],
-  openGraph: {
-    title: "WhoWins - Friendly Bets, Real Bragging Rights",
-    description: "Make friendly bets with friends and find out who wins.",
-    type: "website",
-  },
+  title: "WhoWins - Friendly bets with friends",
+  description: "Make friendly bets with friends and find out who wins.",
 };
 
 export default function RootLayout({
