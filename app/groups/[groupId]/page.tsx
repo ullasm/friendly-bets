@@ -105,21 +105,65 @@ function GroupDashboardContent() {
 
   useEffect(() => {
     if (!user) return;
+    const currentUser = user;
 
-    Promise.all([
-      getGroupById(groupId),
-      getUserGroupMember(groupId, user.uid),
-      getGroupMembers(groupId),
-      getMatches(groupId),
-    ])
-      .then(([g, me, mems, mats]) => {
-        setGroup(g);
-        setMyMember(me);
-        setMembers(mems);
-        setMatches(mats);
-      })
-      .catch(() => toast.error('Failed to load group'))
-      .finally(() => setLoading(false));
+    let cancelled = false;
+
+    async function loadGroupDashboard() {
+      try {
+        const [groupResult, memberResult] = await Promise.all([
+          getGroupById(groupId),
+          getUserGroupMember(groupId, currentUser.uid),
+        ]);
+
+        if (cancelled) {
+          return;
+        }
+
+        setGroup(groupResult);
+        setMyMember(memberResult);
+
+        if (memberResult === null) {
+          return;
+        }
+
+        const [membersResult, matchesResult] = await Promise.allSettled([
+          getGroupMembers(groupId),
+          getMatches(groupId),
+        ]);
+
+        if (cancelled) {
+          return;
+        }
+
+        if (membersResult.status === 'fulfilled') {
+          setMembers(membersResult.value);
+        } else {
+          toast.error('Failed to load leaderboard');
+        }
+
+        if (matchesResult.status === 'fulfilled') {
+          setMatches(matchesResult.value);
+        } else {
+          toast.error('Failed to load matches');
+        }
+      } catch {
+        if (!cancelled) {
+          toast.error('Failed to load group');
+          setMyMember(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadGroupDashboard();
+
+    return () => {
+      cancelled = true;
+    };
   }, [user, groupId]);
 
   async function handleLogout() {
