@@ -19,6 +19,7 @@ import {
   removeMember,
 } from '@/lib/groups';
 import type { Group, GroupMember } from '@/lib/groups';
+import { copyText, getInviteLink } from '@/lib/share';
 
 function ManageContent() {
   const params = useParams<{ groupId: string }>();
@@ -105,8 +106,12 @@ function ManageContent() {
   }
 
   async function copyInviteLink() {
-    await navigator.clipboard.writeText(`https://whowins.live/join/${inviteCode}`);
-    toast.success('Copied!');
+    try {
+      await copyText(getInviteLink(inviteCode));
+      toast.success('Copied!');
+    } catch {
+      toast.error('Could not copy the invite link');
+    }
   }
 
   async function refreshMembers() {
@@ -190,7 +195,7 @@ function ManageContent() {
     );
   }
 
-  const inviteLink = `https://whowins.live/join/${inviteCode}`;
+  const inviteLink = getInviteLink(inviteCode);
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">

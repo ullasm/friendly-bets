@@ -47,6 +47,25 @@ export function generateInviteCode(): string {
   return code;
 }
 
+async function isInviteCodeTaken(inviteCode: string): Promise<boolean> {
+  const snap = await getDocs(
+    query(collection(db, 'groups'), where('inviteCode', '==', inviteCode))
+  );
+  return !snap.empty;
+}
+
+async function generateUniqueInviteCode(): Promise<string> {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const inviteCode = generateInviteCode();
+    const taken = await isInviteCodeTaken(inviteCode);
+    if (!taken) {
+      return inviteCode;
+    }
+  }
+
+  throw new Error('Failed to generate a unique invite code. Please try again.');
+}
+
 // ── Firestore functions ───────────────────────────────────────────────────────
 
 export async function createGroup(
@@ -55,10 +74,12 @@ export async function createGroup(
   userDisplayName: string,
   userAvatarColor: string
 ): Promise<string> {
+  const inviteCode = await generateUniqueInviteCode();
+
   const groupRef = await addDoc(collection(db, 'groups'), {
     name,
     createdBy: userId,
-    inviteCode: generateInviteCode(),
+    inviteCode,
     createdAt: serverTimestamp(),
   });
 
@@ -103,8 +124,9 @@ export async function getGroupById(groupId: string): Promise<Group | null> {
 }
 
 export async function getGroupByInviteCode(inviteCode: string): Promise<Group | null> {
+  const normalizedInviteCode = inviteCode.trim().toUpperCase();
   const snap = await getDocs(
-    query(collection(db, 'groups'), where('inviteCode', '==', inviteCode))
+    query(collection(db, 'groups'), where('inviteCode', '==', normalizedInviteCode))
   );
   if (snap.empty) return null;
   const d = snap.docs[0];
@@ -168,7 +190,7 @@ export async function removeMember(groupId: string, userId: string): Promise<voi
 }
 
 export async function regenerateInviteCode(groupId: string): Promise<string> {
-  const newCode = generateInviteCode();
+  const newCode = await generateUniqueInviteCode();
   await updateDoc(doc(db, 'groups', groupId), { inviteCode: newCode });
   return newCode;
 }

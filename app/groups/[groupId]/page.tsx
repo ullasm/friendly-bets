@@ -12,6 +12,7 @@ import { getGroupById, getUserGroupMember, getGroupMembers } from '@/lib/groups'
 import type { Group, GroupMember } from '@/lib/groups';
 import { getMatches } from '@/lib/matches';
 import type { Match } from '@/lib/matches';
+import { copyText, getInviteLink } from '@/lib/share';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -132,9 +133,13 @@ function GroupDashboardContent() {
 
   async function copyInviteLink() {
     if (!group) return;
-    const link = `https://whowins.live/join/${group.inviteCode}`;
-    await navigator.clipboard.writeText(link);
-    toast.success('Link copied!');
+    const link = getInviteLink(group.inviteCode);
+    try {
+      await copyText(link);
+      toast.success('Link copied!');
+    } catch {
+      toast.error('Could not copy the invite link');
+    }
   }
 
   // ── loading ────────────────────────────────────────────────────────────────
@@ -163,7 +168,7 @@ function GroupDashboardContent() {
 
   const isAdmin = myMember?.role === 'admin';
   const today = new Date();
-  const inviteLink = group ? `https://whowins.live/join/${group.inviteCode}` : '';
+  const inviteLink = group ? getInviteLink(group.inviteCode) : '';
 
   const todayMatches = matches.filter(
     (m) =>

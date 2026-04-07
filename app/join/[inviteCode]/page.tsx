@@ -12,7 +12,7 @@ type PageState = 'loading' | 'invalid' | 'unauthenticated' | 'already-member' | 
 
 export default function JoinPage() {
   const params = useParams<{ inviteCode: string }>();
-  const inviteCode = params.inviteCode;
+  const inviteCode = params.inviteCode.toUpperCase();
   const router = useRouter();
   const { user, userProfile, loading: authLoading } = useAuth();
 
