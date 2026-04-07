@@ -52,6 +52,15 @@ function parseTeams(matchName: string): { teamA: string; teamB: string } {
   return { teamA: matchName.trim(), teamB: 'TBD' };
 }
 
+function getResultLabel(match: Match): string {
+  if (match.result === 'team_a') return `${match.teamA} won`;
+  if (match.result === 'team_b') return `${match.teamB} won`;
+  if (match.result === 'draw') return 'Match drawn';
+  if (match.result === 'abandoned') return 'Match abandoned';
+  if (match.result === 'pending') return 'Pending';
+  return match.result;
+}
+
 function StatusBadge({ status }: { status: Match['status'] }) {
   const styles: Record<Match['status'], string> = {
     live: 'bg-green-500/20 text-green-400',
@@ -594,7 +603,7 @@ function GroupAdminContent() {
                       )}
 
                       {!canDeclare && (
-                        <span className="text-xs text-[var(--text-muted)] italic">Result: {match.result}</span>
+                        <span className="text-xs text-[var(--text-muted)] italic">Result: {getResultLabel(match)}</span>
                       )}
                     </div>
                   </div>
