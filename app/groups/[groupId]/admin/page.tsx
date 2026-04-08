@@ -12,7 +12,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { logoutUser } from '@/lib/auth';
 import { getGroupById, getUserGroupMember } from '@/lib/groups';
 import type { Group } from '@/lib/groups';
-import { getMatches, createMatch, settleMatch, updateMatch, deleteMatch } from '@/lib/matches';
+import { getMatches, createMatch, declareMatchResult, updateMatch, deleteMatch } from '@/lib/matches';
 import type { Match } from '@/lib/matches';
 import { getCricketMatches } from '@/lib/cricapi';
 import type { CricMatch } from '@/lib/cricapi';
@@ -111,6 +111,8 @@ function GroupAdminContent() {
   const [drawAllowed, setDrawAllowed] = useState(false);
   const [noDrawPolicy, setNoDrawPolicy] = useState<Match['noDrawPolicy']>('refund');
   const [bettingOpen, setBettingOpen] = useState(true);
+  const [creationStatus, setCreationStatus] = useState<Match['status']>('upcoming');
+  const [creationResult, setCreationResult] = useState<Match['result']>('pending');
   const [creating, setCreating] = useState(false);
 
   // matches state
@@ -241,24 +243,51 @@ function GroupAdminContent() {
   async function handleCreateMatch(e: React.FormEvent) {
     e.preventDefault();
     if (!matchDate) { toast.error('Please set a match date'); return; }
+
+    const trimmedTeamA = teamA.trim();
+    const trimmedTeamB = teamB.trim();
+    if (!trimmedTeamA || !trimmedTeamB) {
+      toast.error('Both team names are required');
+      return;
+    }
+
+    const resolvedDrawAllowed = format === 'Test' ? true : drawAllowed;
+    const resolvedStatus = creationStatus;
+    let resolvedResult: Match['result'] = 'pending';
+
+    if (resolvedStatus === 'completed') {
+      if (creationResult === 'pending' || creationResult === 'abandoned') {
+        toast.error('Choose a completed match result');
+        return;
+      }
+      resolvedResult = creationResult;
+    } else if (resolvedStatus === 'abandoned') {
+      resolvedResult = 'abandoned';
+    }
+
+    const resolvedBettingOpen = resolvedStatus === 'upcoming' || resolvedStatus === 'live'
+      ? bettingOpen
+      : false;
+
     setCreating(true);
     try {
       await createMatch(groupId, {
-        teamA: teamA.trim(),
-        teamB: teamB.trim(),
+        teamA: trimmedTeamA,
+        teamB: trimmedTeamB,
         format,
-        drawAllowed,
-        noDrawPolicy: drawAllowed ? noDrawPolicy : 'refund',
+        drawAllowed: resolvedDrawAllowed,
+        noDrawPolicy: resolvedDrawAllowed ? noDrawPolicy : 'refund',
         matchDate: Timestamp.fromDate(new Date(matchDate)),
-        status: 'upcoming',
-        result: 'pending',
-        bettingOpen,
-        bettingClosedAt: null,
+        status: resolvedStatus,
+        result: resolvedResult,
+        bettingOpen: resolvedBettingOpen,
+        bettingClosedAt: resolvedBettingOpen ? null : Timestamp.fromDate(new Date(matchDate)),
         cricApiMatchId: null,
       });
       toast.success('Match created!');
       setTeamA(''); setTeamB(''); setFormat('T20');
       setMatchDate(''); setDrawAllowed(false); setBettingOpen(true);
+      setCreationStatus('upcoming'); setCreationResult('pending');
       await refreshMatches();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to create match');
@@ -266,7 +295,6 @@ function GroupAdminContent() {
       setCreating(false);
     }
   }
-
   async function handleToggleBetting(match: Match) {
     setTogglingBet((p) => ({ ...p, [match.id]: true }));
     try {
@@ -346,12 +374,14 @@ function GroupAdminContent() {
   }
 
   async function handleDeclareResult(match: Match) {
-    const result = selectedResult[match.id];
+    const result = selectedResult[match.id] ?? (match.result !== 'pending' ? match.result : undefined);
     if (!result) return;
     setDeclaring((p) => ({ ...p, [match.id]: true }));
     try {
-      await settleMatch(match.id, groupId, result, match.noDrawPolicy);
-      toast.success('Result declared and points settled!');
+      await declareMatchResult(match.id, groupId, result, match.noDrawPolicy);
+      toast.success(match.status === 'completed' || match.status === 'abandoned'
+        ? 'Result updated and points re-settled!'
+        : 'Result declared and points settled!');
       await refreshMatches();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to declare result');
@@ -649,6 +679,29 @@ function GroupAdminContent() {
                 </div>
               </div>
 
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Initial Status</label>
+                  <select value={creationStatus} onChange={(e) => setCreationStatus(e.target.value as Match['status'])} className={INPUT_CLASS}>
+                    <option value="upcoming">Upcoming</option>
+                    <option value="live">Live</option>
+                    <option value="completed">Completed</option>
+                    <option value="abandoned">Abandoned</option>
+                  </select>
+                </div>
+                {creationStatus === 'completed' && (
+                  <div>
+                    <label className="block text-sm font-medium text-[var(--text-secondary)] mb-1">Declared Result</label>
+                    <select value={creationResult} onChange={(e) => setCreationResult(e.target.value as Match['result'])} className={INPUT_CLASS}>
+                      <option value="pending" disabled>Select result...</option>
+                      <option value="team_a">{teamA.trim() || 'Team A'} wins</option>
+                      <option value="team_b">{teamB.trim() || 'Team B'} wins</option>
+                      {drawAllowed && <option value="draw">Draw</option>}
+                    </select>
+                  </div>
+                )}
+              </div>
+
               <div className="flex flex-wrap items-center gap-6">
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                   <input
@@ -663,15 +716,17 @@ function GroupAdminContent() {
                     {format === 'Test' && <span className="ml-1 text-xs text-[var(--text-muted)]">(auto for Test)</span>}
                   </span>
                 </label>
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={bettingOpen}
-                    onChange={(e) => setBettingOpen(e.target.checked)}
-                    className="w-4 h-4 accent-green-500"
-                  />
-                  <span className="text-sm text-[var(--text-secondary)]">Betting Open</span>
-                </label>
+                {(creationStatus === 'upcoming' || creationStatus === 'live') && (
+                  <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={bettingOpen}
+                      onChange={(e) => setBettingOpen(e.target.checked)}
+                      className="w-4 h-4 accent-green-500"
+                    />
+                    <span className="text-sm text-[var(--text-secondary)]">Betting Open</span>
+                  </label>
+                )}
               </div>
 
               {drawAllowed && (
@@ -683,6 +738,10 @@ function GroupAdminContent() {
                   </select>
                 </div>
               )}
+
+              <p className="text-xs text-[var(--text-muted)]">
+                Use Completed or Abandoned to add historical matches that are already declared.
+              </p>
 
               <button
                 type="submit"
@@ -715,7 +774,8 @@ function GroupAdminContent() {
           ) : (
             <div className="space-y-4">
               {matches.map((match) => {
-                const canDeclare = match.status === 'upcoming' || match.status === 'live';
+                const canToggleBetting = match.status === 'upcoming' || match.status === 'live';
+                const displayedResult = selectedResult[match.id] ?? (match.result === 'pending' ? '' : match.result);
                 return (
                   <div key={match.id} className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-[var(--card-padding)] space-y-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -729,14 +789,12 @@ function GroupAdminContent() {
                       </div>
                       <div className="flex items-center gap-2">
                         <StatusBadge status={match.status} />
-                        {canDeclare && (
-                          <button
-                            onClick={() => openEdit(match)}
-                            className="text-xs font-medium px-2.5 py-1 rounded-lg bg-[var(--bg-input)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border)] transition-colors"
-                          >
-                            Edit
-                          </button>
-                        )}
+                        <button
+                          onClick={() => openEdit(match)}
+                          className="text-xs font-medium px-2.5 py-1 rounded-lg bg-[var(--bg-input)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border)] transition-colors"
+                        >
+                          Edit
+                        </button>
                         <button
                           onClick={() => setConfirmDelete(match)}
                           className="text-xs font-medium px-2.5 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors"
@@ -749,7 +807,7 @@ function GroupAdminContent() {
                     <p className="text-xs text-[var(--text-muted)]">{formatMatchDate(match.matchDate)}</p>
 
                     <div className="flex flex-wrap items-center gap-3 pt-1">
-                      {canDeclare && (
+                      {canToggleBetting && (
                         <button
                           onClick={() => handleToggleBetting(match)}
                           disabled={togglingBet[match.id]}
@@ -763,35 +821,41 @@ function GroupAdminContent() {
                         </button>
                       )}
 
-                      {canDeclare && (
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <select
-                            value={selectedResult[match.id] ?? ''}
-                            onChange={(e) =>
-                              setSelectedResult((p) => ({ ...p, [match.id]: e.target.value as ResultOption }))
-                            }
-                            className="rounded-lg bg-[var(--bg-input)] border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                          >
-                            <option value="" disabled>Declare result…</option>
-                            <option value="team_a">{match.teamA} wins</option>
-                            <option value="team_b">{match.teamB} wins</option>
-                            {match.drawAllowed && <option value="draw">Draw</option>}
-                            <option value="abandoned">Abandoned</option>
-                          </select>
-                          <button
-                            onClick={() => handleDeclareResult(match)}
-                            disabled={!selectedResult[match.id] || declaring[match.id]}
-                            className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-green-500 hover:bg-green-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors"
-                          >
-                            {declaring[match.id] ? 'Settling…' : 'Confirm'}
-                          </button>
-                        </div>
-                      )}
-
-                      {!canDeclare && (
-                        <span className="text-xs text-[var(--text-muted)] italic">Result: {getResultLabel(match)}</span>
-                      )}
+                      <span className="text-xs text-[var(--text-muted)] italic">Current result: {getResultLabel(match)}</span>
                     </div>
+
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <select
+                        value={displayedResult}
+                        onChange={(e) =>
+                          setSelectedResult((p) => ({ ...p, [match.id]: e.target.value as ResultOption }))
+                        }
+                        className="rounded-lg bg-[var(--bg-input)] border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                      >
+                        <option value="" disabled>{match.result === 'pending' ? 'Declare result...' : 'Update result...'}</option>
+                        <option value="team_a">{match.teamA} wins</option>
+                        <option value="team_b">{match.teamB} wins</option>
+                        {match.drawAllowed && <option value="draw">Draw</option>}
+                        <option value="abandoned">Abandoned</option>
+                      </select>
+                      <button
+                        onClick={() => handleDeclareResult(match)}
+                        disabled={!displayedResult || declaring[match.id]}
+                        className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-green-500 hover:bg-green-600 disabled:opacity-40 disabled:cursor-not-allowed text-white transition-colors"
+                      >
+                        {declaring[match.id]
+                          ? 'Saving...'
+                          : match.status === 'completed' || match.status === 'abandoned'
+                          ? 'Update Result'
+                          : 'Confirm'}
+                      </button>
+                    </div>
+
+                    {(match.status === 'completed' || match.status === 'abandoned') && (
+                      <p className="text-xs text-[var(--text-muted)]">
+                        Updating a declared match will roll back old points and settle again using the new result.
+                      </p>
+                    )}
                   </div>
                 );
               })}
@@ -810,3 +874,13 @@ export default function GroupAdminPage() {
     </ProtectedRoute>
   );
 }
+
+
+
+
+
+
+
+
+
+

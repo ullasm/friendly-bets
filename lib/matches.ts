@@ -16,7 +16,7 @@ import {
 import type { Timestamp as TimestampType } from 'firebase/firestore';
 import { db } from './firebase';
 
-// ── interfaces ────────────────────────────────────────────────────────────────
+// -- interfaces ---------------------------------------------------------------
 
 export interface Match {
   id: string;
@@ -55,14 +55,15 @@ export interface Bet {
   placedAt: TimestampType;
 }
 
-// ── match functions ───────────────────────────────────────────────────────────
+function groupMemberRef(groupId: string, userId: string) {
+  return doc(db, 'groups', groupId, 'members', userId);
+}
+
+// -- match functions ----------------------------------------------------------
 
 export async function getMatches(groupId: string): Promise<Match[]> {
   const snap = await getDocs(
-    query(
-      collection(db, 'matches'),
-      where('groupId', '==', groupId)
-    )
+    query(collection(db, 'matches'), where('groupId', '==', groupId))
   );
   return snap.docs
     .map((d) => ({ id: d.id, ...d.data() } as Match))
@@ -97,7 +98,7 @@ export async function deleteMatch(matchId: string): Promise<void> {
   await deleteDoc(doc(db, 'matches', matchId));
 }
 
-// ── bet functions ─────────────────────────────────────────────────────────────
+// -- bet functions ------------------------------------------------------------
 
 export async function placeBet(
   matchId: string,
@@ -123,8 +124,6 @@ export async function getUserBetsForGroup(
   groupId: string,
   userId: string
 ): Promise<Bet[]> {
-  // Single-field query on userId (auto-indexed, satisfies own-bet read rule).
-  // groupId is filtered in JS since bets span multiple groups.
   const snap = await getDocs(
     query(collection(db, 'bets'), where('userId', '==', userId))
   );
@@ -145,13 +144,8 @@ export async function getUserBetForMatch(
   matchId: string,
   userId: string
 ): Promise<Bet | null> {
-  // Query on userId only (single-field, auto-indexed) to avoid requiring a
-  // composite index. matchId is checked in JS against the smaller result set.
   const snap = await getDocs(
-    query(
-      collection(db, 'bets'),
-      where('userId', '==', userId)
-    )
+    query(collection(db, 'bets'), where('userId', '==', userId))
   );
   if (snap.empty) return null;
   const found = snap.docs.find((d) => d.data().matchId === matchId);
@@ -163,20 +157,36 @@ export async function getGroupBetsForMatch(
   matchId: string,
   groupId: string
 ): Promise<Bet[]> {
-  // Query by groupId only (single-field, auto-indexed) to avoid requiring a
-  // composite index. matchId is filtered in JS from the smaller result set.
   const snap = await getDocs(
-    query(
-      collection(db, 'bets'),
-      where('groupId', '==', groupId)
-    )
+    query(collection(db, 'bets'), where('groupId', '==', groupId))
   );
   return snap.docs
     .filter((d) => d.data().matchId === matchId)
     .map((d) => ({ id: d.id, ...d.data() } as Bet));
 }
 
-// ── settlement ────────────────────────────────────────────────────────────────
+async function rollbackSettledMatch(matchId: string, groupId: string): Promise<void> {
+  const bets = await getGroupBetsForMatch(matchId, groupId);
+
+  await Promise.all(
+    bets.map(async (bet) => {
+      const previousDelta = bet.pointsDelta ?? 0;
+
+      if (previousDelta !== 0) {
+        await updateDoc(groupMemberRef(groupId, bet.userId), {
+          totalPoints: increment(-previousDelta),
+        });
+      }
+
+      await updateDoc(doc(db, 'bets', bet.id), {
+        status: 'pending',
+        pointsDelta: null,
+      });
+    })
+  );
+}
+
+// -- settlement ---------------------------------------------------------------
 
 export async function settleMatch(
   matchId: string,
@@ -187,10 +197,6 @@ export async function settleMatch(
   const bets = await getGroupBetsForMatch(matchId, groupId);
   const matchRef = doc(db, 'matches', matchId);
 
-  function memberRef(userId: string) {
-    return doc(db, 'groups', groupId, 'members', userId);
-  }
-
   async function refundAll() {
     await Promise.all(
       bets.map((b) =>
@@ -199,7 +205,6 @@ export async function settleMatch(
     );
   }
 
-  // ── abandoned ──────────────────────────────────────────────────────────────
   if (result === 'abandoned') {
     await refundAll();
     await updateDoc(matchRef, {
@@ -211,7 +216,6 @@ export async function settleMatch(
     return;
   }
 
-  // ── draw ───────────────────────────────────────────────────────────────────
   if (result === 'draw') {
     const drawBets = bets.filter((b) => b.pickedOutcome === 'draw');
     const otherBets = bets.filter((b) => b.pickedOutcome !== 'draw');
@@ -220,7 +224,6 @@ export async function settleMatch(
       if (noDrawPolicy === 'refund') {
         await refundAll();
       }
-      // rollover: leave bets as pending, admin handles next match
       await updateDoc(matchRef, {
         status: 'completed',
         result: 'draw',
@@ -230,18 +233,18 @@ export async function settleMatch(
       return;
     }
 
-    const losersStake = otherBets.reduce((s, b) => s + b.stake, 0);
+    const losersStake = otherBets.reduce((sum, bet) => sum + bet.stake, 0);
     const winnerShare = Math.floor(losersStake / drawBets.length);
 
     await Promise.all([
-      ...drawBets.map((b) =>
-        updateDoc(doc(db, 'bets', b.id), { status: 'won', pointsDelta: winnerShare }).then(() =>
-          updateDoc(memberRef(b.userId), { totalPoints: increment(winnerShare) })
+      ...drawBets.map((bet) =>
+        updateDoc(doc(db, 'bets', bet.id), { status: 'won', pointsDelta: winnerShare }).then(() =>
+          updateDoc(groupMemberRef(groupId, bet.userId), { totalPoints: increment(winnerShare) })
         )
       ),
-      ...otherBets.map((b) =>
-        updateDoc(doc(db, 'bets', b.id), { status: 'lost', pointsDelta: -b.stake }).then(() =>
-          updateDoc(memberRef(b.userId), { totalPoints: increment(-b.stake) })
+      ...otherBets.map((bet) =>
+        updateDoc(doc(db, 'bets', bet.id), { status: 'lost', pointsDelta: -bet.stake }).then(() =>
+          updateDoc(groupMemberRef(groupId, bet.userId), { totalPoints: increment(-bet.stake) })
         )
       ),
     ]);
@@ -255,22 +258,21 @@ export async function settleMatch(
     return;
   }
 
-  // ── normal win (team_a / team_b) ───────────────────────────────────────────
-  const winnerBets = bets.filter((b) => b.pickedOutcome === result);
-  const loserBets = bets.filter((b) => b.pickedOutcome !== result);
+  const winnerBets = bets.filter((bet) => bet.pickedOutcome === result);
+  const loserBets = bets.filter((bet) => bet.pickedOutcome !== result);
 
-  const losersStake = loserBets.reduce((s, b) => s + b.stake, 0);
+  const losersStake = loserBets.reduce((sum, bet) => sum + bet.stake, 0);
   const winnerShare = winnerBets.length > 0 ? Math.floor(losersStake / winnerBets.length) : 0;
 
   await Promise.all([
-    ...winnerBets.map((b) =>
-      updateDoc(doc(db, 'bets', b.id), { status: 'won', pointsDelta: winnerShare }).then(() =>
-        updateDoc(memberRef(b.userId), { totalPoints: increment(winnerShare) })
+    ...winnerBets.map((bet) =>
+      updateDoc(doc(db, 'bets', bet.id), { status: 'won', pointsDelta: winnerShare }).then(() =>
+        updateDoc(groupMemberRef(groupId, bet.userId), { totalPoints: increment(winnerShare) })
       )
     ),
-    ...loserBets.map((b) =>
-      updateDoc(doc(db, 'bets', b.id), { status: 'lost', pointsDelta: -b.stake }).then(() =>
-        updateDoc(memberRef(b.userId), { totalPoints: increment(-b.stake) })
+    ...loserBets.map((bet) =>
+      updateDoc(doc(db, 'bets', bet.id), { status: 'lost', pointsDelta: -bet.stake }).then(() =>
+        updateDoc(groupMemberRef(groupId, bet.userId), { totalPoints: increment(-bet.stake) })
       )
     ),
   ]);
@@ -283,7 +285,25 @@ export async function settleMatch(
   });
 }
 
-// ── leaderboard ───────────────────────────────────────────────────────────────
+export async function declareMatchResult(
+  matchId: string,
+  groupId: string,
+  result: 'team_a' | 'team_b' | 'draw' | 'abandoned',
+  noDrawPolicy: string
+): Promise<void> {
+  const currentMatch = await getMatchById(matchId);
+  if (!currentMatch) {
+    throw new Error('Match not found');
+  }
+
+  if (currentMatch.status === 'completed' || currentMatch.status === 'abandoned') {
+    await rollbackSettledMatch(matchId, groupId);
+  }
+
+  await settleMatch(matchId, groupId, result, noDrawPolicy);
+}
+
+// -- leaderboard --------------------------------------------------------------
 
 export async function getAllUsers(): Promise<LeaderboardUser[]> {
   const snap = await getDocs(
