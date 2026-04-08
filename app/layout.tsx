@@ -1,3 +1,4 @@
+import Script from "next/script";
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "react-hot-toast";
@@ -20,6 +21,8 @@ export const metadata: Metadata = {
   description: "Make friendly bets with friends and find out who wins.",
 };
 
+const themeInitScript = `(function(){try{var stored=localStorage.getItem("whowins-theme");var fallback="dark";var theme=(stored==="dark"||stored==="light"||stored==="dark-compact"||stored==="light-compact")?stored:fallback;document.documentElement.setAttribute("data-theme",theme);}catch(e){document.documentElement.setAttribute("data-theme","dark");}})();`;
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -29,9 +32,13 @@ export default function RootLayout({
     <html
       lang="en"
       data-theme="dark"
+      suppressHydrationWarning
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
+        <Script id="theme-init" strategy="beforeInteractive">
+          {themeInitScript}
+        </Script>
         <ThemeProvider>
           <AuthProvider>{children}</AuthProvider>
           <Toaster />

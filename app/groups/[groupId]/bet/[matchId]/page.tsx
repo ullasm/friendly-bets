@@ -77,6 +77,13 @@ function InfoScreen({ groupId, message }: { groupId: string; message: string }) 
   );
 }
 
+function getBetActionErrorMessage(err: unknown): string {
+  if ((err as { code?: string })?.code === 'permission-denied') {
+    return 'Firestore rules are blocking bet placement. Publish the latest Firestore rules and try again.';
+  }
+  return err instanceof Error ? err.message : 'Failed to place bet';
+}
+
 function OutcomeButton({
   label,
   value,
@@ -118,12 +125,14 @@ function BetContent() {
   const [existingBet, setExistingBet] = useState<Bet | null | undefined>(undefined);
   const [member, setMember] = useState<GroupMember | null | undefined>(undefined);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadingData, setLoadingData] = useState(true);
   const [selected, setSelected] = useState<Outcome | null>(null);
   const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
+    setLoadingData(true);
     Promise.all([
       getMatchById(matchId),
       getUserBetForMatch(matchId, user.uid),
@@ -139,6 +148,11 @@ function BetContent() {
         if (cancelled) return;
         console.error('[BetPage] Failed to load:', err);
         setLoadError('Failed to load match data. Please try again.');
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoadingData(false);
+        }
       });
     return () => { cancelled = true; };
   }, [user, matchId, groupId]);
@@ -151,7 +165,7 @@ function BetContent() {
       toast.success('Bet placed successfully!');
       router.replace(`/groups/${groupId}`);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to place bet');
+      toast.error(getBetActionErrorMessage(err));
     } finally {
       setConfirming(false);
     }
@@ -163,13 +177,28 @@ function BetContent() {
   }
 
   // ── loading ──────────────────────────────────────────────────────────────
-  if (match === undefined || existingBet === undefined || member === undefined) {
+  if (loadingData || match === undefined || existingBet === undefined || member === undefined) {
     return (
-      <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center">
-        <svg className="animate-spin h-10 w-10 text-green-500" fill="none" viewBox="0 0 24 24">
-          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-        </svg>
+      <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
+        <div className="max-w-lg mx-auto px-6 py-8 space-y-6">
+          <BackLink groupId={groupId} />
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-[var(--card-padding)] space-y-4 animate-pulse">
+            <div className="flex items-center justify-between gap-3">
+              <div className="h-7 w-56 rounded bg-[var(--bg-input)]" />
+              <div className="h-6 w-24 rounded bg-[var(--bg-input)]" />
+            </div>
+            <div className="h-4 w-36 rounded bg-[var(--bg-input)]" />
+            <div className="h-4 w-28 rounded bg-[var(--bg-input)]" />
+          </div>
+          <div className="space-y-3">
+            <div className="h-4 w-28 rounded bg-[var(--bg-input)] animate-pulse" />
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+              <div className="h-16 rounded-xl bg-[var(--bg-input)] animate-pulse" />
+              <div className="h-16 rounded-xl bg-[var(--bg-input)] animate-pulse" />
+              <div className="hidden h-16 rounded-xl bg-[var(--bg-input)] animate-pulse sm:block" />
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -326,3 +355,9 @@ export default function GroupBetPage() {
     </ProtectedRoute>
   );
 }
+
+
+
+
+
+

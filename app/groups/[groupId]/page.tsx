@@ -63,6 +63,18 @@ function getPickedLabel(match: Match, pickedOutcome: Bet['pickedOutcome']) {
   return 'Draw';
 }
 
+function getMatchPointSummary(bets: Bet[], memberNames: Record<string, string>) {
+  return bets
+    .filter((bet) => bet.pointsDelta !== null)
+    .map((bet) => ({
+      id: bet.id,
+      displayName: memberNames[bet.userId] ?? 'Unknown',
+      pointsDelta: bet.pointsDelta ?? 0,
+      status: bet.status,
+    }))
+    .sort((a, b) => b.pointsDelta - a.pointsDelta || a.displayName.localeCompare(b.displayName));
+}
+
 interface MatchCardProps {
   match: Match;
   groupId: string;
@@ -86,6 +98,8 @@ function MatchCard({ match, groupId, myBet, bets, memberNames, currentUserId }: 
     acc[label].push(bet);
     return acc;
   }, {});
+  const pointSummary = getMatchPointSummary(bets, memberNames);
+  const hasSettledSummary = match.status === 'completed' || match.status === 'abandoned';
 
   return (
     <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-[var(--card-padding)] flex flex-col gap-3">
@@ -127,36 +141,63 @@ function MatchCard({ match, groupId, myBet, bets, memberNames, currentUserId }: 
         ) : null}
       </div>
       {bets.length > 0 && (
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-input)] px-3 py-3">
-          <p className="text-xs font-semibold text-[var(--text-secondary)]">Who betted</p>
-          <div className="mt-2 space-y-2">
-            {Object.entries(betsByOutcome).map(([label, outcomeBets]) => (
-              <div key={label} className="flex flex-wrap items-start gap-2 text-xs">
-                <span className="rounded-full bg-[var(--bg-card)] px-2 py-0.5 font-medium text-[var(--text-primary)]">
-                  {label}
-                </span>
-                <div className="flex flex-wrap gap-1.5">
-                  {outcomeBets.map((bet) => {
-                    const isMe = bet.userId === currentUserId;
-                    const displayName = memberNames[bet.userId] ?? 'Unknown';
-                    return (
-                      <span
-                        key={bet.id}
-                        className={`rounded-full px-2 py-0.5 ${
-                          isMe
-                            ? 'bg-green-500/15 text-green-400'
-                            : 'bg-[var(--bg-card)] text-[var(--text-secondary)]'
-                        }`}
-                      >
-                        {displayName}
-                        {isMe ? ' (you)' : ''}
-                      </span>
-                    );
-                  })}
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-input)] px-3 py-3 space-y-3">
+          <div>
+            <p className="text-xs font-semibold text-[var(--text-secondary)]">Who betted</p>
+            <div className="mt-2 space-y-2">
+              {Object.entries(betsByOutcome).map(([label, outcomeBets]) => (
+                <div key={label} className="flex flex-wrap items-start gap-2 text-xs">
+                  <span className="rounded-full bg-[var(--bg-card)] px-2 py-0.5 font-medium text-[var(--text-primary)]">
+                    {label}
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {outcomeBets.map((bet) => {
+                      const isMe = bet.userId === currentUserId;
+                      const displayName = memberNames[bet.userId] ?? 'Unknown';
+                      return (
+                        <span
+                          key={bet.id}
+                          className={`rounded-full px-2 py-0.5 ${
+                            isMe
+                              ? 'bg-green-500/15 text-green-400'
+                              : 'bg-[var(--bg-card)] text-[var(--text-secondary)]'
+                          }`}
+                        >
+                          {displayName}
+                          {isMe ? ' (you)' : ''}
+                        </span>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
+          {hasSettledSummary && (
+            <div className="border-t border-[var(--border)] pt-3">
+              <p className="text-xs font-semibold text-[var(--text-secondary)]">Points summary</p>
+              {pointSummary.length === 0 ? (
+                <p className="mt-2 text-xs text-[var(--text-muted)]">No point changes recorded for this match.</p>
+              ) : (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {pointSummary.map((entry) => (
+                    <span
+                      key={entry.id}
+                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                        entry.pointsDelta > 0
+                          ? 'bg-green-500/15 text-green-400'
+                          : entry.pointsDelta < 0
+                          ? 'bg-red-500/15 text-red-400'
+                          : 'bg-[var(--bg-card)] text-[var(--text-muted)]'
+                      }`}
+                    >
+                      {entry.displayName}: {entry.pointsDelta > 0 ? '+' : ''}{entry.pointsDelta} pts
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -564,3 +605,8 @@ export default function GroupDashboardPage() {
     </ProtectedRoute>
   );
 }
+
+
+
+
+
