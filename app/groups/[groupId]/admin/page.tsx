@@ -85,6 +85,13 @@ function getBetLabel(match: Match, pickedOutcome: Bet['pickedOutcome']): string 
   return 'Draw';
 }
 
+function getActionErrorMessage(err: unknown, fallback: string): string {
+  if ((err as { code?: string })?.code === 'permission-denied') {
+    return 'Firestore rules need to be published to allow admin-managed bets for past matches.';
+  }
+  return err instanceof Error ? err.message : fallback;
+}
+
 function StatusBadge({ status }: { status: Match['status'] }) {
   const styles: Record<Match['status'], string> = {
     live: 'bg-green-500/20 text-green-400',
@@ -281,7 +288,7 @@ function GroupAdminContent() {
       await refreshMatches();
       toast.success('Bet saved');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save bet');
+      toast.error(getActionErrorMessage(err, 'Failed to save bet'));
     } finally {
       setSavingMemberBets((prev) => ({ ...prev, [userId]: false }));
     }
@@ -298,7 +305,7 @@ function GroupAdminContent() {
       await refreshMatches();
       toast.success('Bet cleared');
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to clear bet');
+      toast.error(getActionErrorMessage(err, 'Failed to clear bet'));
     } finally {
       setSavingMemberBets((prev) => ({ ...prev, [userId]: false }));
     }
@@ -508,7 +515,7 @@ function GroupAdminContent() {
         await loadManageBets(match);
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to declare result');
+      toast.error(getActionErrorMessage(err, 'Failed to declare result'));
     } finally {
       setDeclaring((p) => ({ ...p, [match.id]: false }));
     }
@@ -1119,6 +1126,10 @@ export default function GroupAdminPage() {
     </ProtectedRoute>
   );
 }
+
+
+
+
 
 
 

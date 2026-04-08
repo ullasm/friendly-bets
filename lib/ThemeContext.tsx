@@ -5,7 +5,7 @@ import { createContext, useContext, useEffect, useState } from 'react';
 export type Theme = 'dark' | 'light' | 'dark-compact' | 'light-compact';
 
 const STORAGE_KEY = 'whowins-theme';
-const DEFAULT_THEME: Theme = 'light-compact';
+const DEFAULT_THEME: Theme = 'dark';
 
 interface ThemeContextValue {
   theme: Theme;
@@ -52,3 +52,4 @@ export function useTheme(): ThemeContextValue {
   if (!ctx) throw new Error('useTheme must be used within ThemeProvider');
   return ctx;
 }
+

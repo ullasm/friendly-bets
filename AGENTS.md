@@ -36,3 +36,15 @@ chore(deps): update next.js to latest version
 
 Do this for every change, no matter how small. Never skip this step.
 <!-- END:commit-message-rules -->
+
+<!-- BEGIN:prompt-storage-rules -->
+# Prompt Storage Rule
+
+When the user asks to create, generate, save, store, or update a prompt, always create or update a file in `prompts/`.
+
+Use this filename format unless the user explicitly requests a different one:
+`prompt-YYYY-MM-DD.txt`
+
+Use the current date for the filename.
+Prefer saving the prompt in the repository over returning it only in chat.
+<!-- END:prompt-storage-rules -->
