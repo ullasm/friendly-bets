@@ -65,11 +65,17 @@ service cloud.firestore {
         request.auth.uid == resource.data.userId ||
         isGroupMember(resource.data.groupId)
       );
-      allow create: if isSignedIn()
-        && request.auth.uid == request.resource.data.userId
-        && isGroupMember(request.resource.data.groupId);
+      allow create: if isSignedIn() && (
+        (request.auth.uid == request.resource.data.userId
+          && isGroupMember(request.resource.data.groupId)) ||
+        isGroupAdmin(request.resource.data.groupId)
+      );
       allow update: if isGroupAdmin(resource.data.groupId);
-      allow delete: if false;
+      allow delete: if isGroupAdmin(resource.data.groupId);
     }
   }
 }
+
+
+
+

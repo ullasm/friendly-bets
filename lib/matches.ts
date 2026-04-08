@@ -55,6 +55,11 @@ export interface Bet {
   placedAt: TimestampType;
 }
 
+export interface BetInput {
+  pickedOutcome: Bet['pickedOutcome'];
+  stake: number;
+}
+
 function groupMemberRef(groupId: string, userId: string) {
   return doc(db, 'groups', groupId, 'members', userId);
 }
@@ -163,6 +168,15 @@ export async function getGroupBetsForMatch(
   return snap.docs
     .filter((d) => d.data().matchId === matchId)
     .map((d) => ({ id: d.id, ...d.data() } as Bet));
+}
+
+export async function getMemberBetForMatch(
+  matchId: string,
+  groupId: string,
+  userId: string
+): Promise<Bet | null> {
+  const bets = await getGroupBetsForMatch(matchId, groupId);
+  return bets.find((bet) => bet.userId === userId) ?? null;
 }
 
 async function rollbackSettledMatch(matchId: string, groupId: string): Promise<void> {
@@ -303,6 +317,79 @@ export async function declareMatchResult(
   await settleMatch(matchId, groupId, result, noDrawPolicy);
 }
 
+
+export async function adminUpsertBetForMatch(
+  matchId: string,
+  groupId: string,
+  userId: string,
+  betInput: BetInput
+): Promise<void> {
+  const currentMatch = await getMatchById(matchId);
+  if (!currentMatch) {
+    throw new Error('Match not found');
+  }
+
+  const shouldResettle = currentMatch.status === 'completed' || currentMatch.status === 'abandoned';
+
+  if (shouldResettle) {
+    await rollbackSettledMatch(matchId, groupId);
+  }
+
+  const existingBet = await getMemberBetForMatch(matchId, groupId, userId);
+
+  if (existingBet) {
+    await updateDoc(doc(db, 'bets', existingBet.id), {
+      pickedOutcome: betInput.pickedOutcome,
+      stake: betInput.stake,
+      pointsDelta: null,
+      status: 'pending',
+    });
+  } else {
+    await addDoc(collection(db, 'bets'), {
+      matchId,
+      groupId,
+      userId,
+      pickedOutcome: betInput.pickedOutcome,
+      stake: betInput.stake,
+      pointsDelta: null,
+      status: 'pending',
+      placedAt: serverTimestamp(),
+    });
+  }
+
+  if (shouldResettle) {
+    await settleMatch(matchId, groupId, currentMatch.result, currentMatch.noDrawPolicy);
+  }
+}
+
+export async function adminClearBetForMatch(
+  matchId: string,
+  groupId: string,
+  userId: string
+): Promise<void> {
+  const currentMatch = await getMatchById(matchId);
+  if (!currentMatch) {
+    throw new Error('Match not found');
+  }
+
+  const existingBet = await getMemberBetForMatch(matchId, groupId, userId);
+  if (!existingBet) {
+    return;
+  }
+
+  const shouldResettle = currentMatch.status === 'completed' || currentMatch.status === 'abandoned';
+
+  if (shouldResettle) {
+    await rollbackSettledMatch(matchId, groupId);
+  }
+
+  await deleteDoc(doc(db, 'bets', existingBet.id));
+
+  if (shouldResettle) {
+    await settleMatch(matchId, groupId, currentMatch.result, currentMatch.noDrawPolicy);
+  }
+}
+
 // -- leaderboard --------------------------------------------------------------
 
 export async function getAllUsers(): Promise<LeaderboardUser[]> {
@@ -311,3 +398,11 @@ export async function getAllUsers(): Promise<LeaderboardUser[]> {
   );
   return snap.docs.map((d) => d.data() as LeaderboardUser);
 }
+
+
+
+
+
+
+
+

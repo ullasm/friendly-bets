@@ -10,14 +10,16 @@ import ProtectedRoute from '@/components/ProtectedRoute';
 import ThemeSwitcher from '@/components/ThemeSwitcher';
 import { useAuth } from '@/lib/AuthContext';
 import { logoutUser } from '@/lib/auth';
-import { getGroupById, getUserGroupMember } from '@/lib/groups';
-import type { Group } from '@/lib/groups';
-import { getMatches, createMatch, declareMatchResult, updateMatch, deleteMatch } from '@/lib/matches';
-import type { Match } from '@/lib/matches';
+import { getGroupById, getUserGroupMember, getGroupMembers } from '@/lib/groups';
+import type { Group, GroupMember } from '@/lib/groups';
+import { getMatches, createMatch, declareMatchResult, updateMatch, deleteMatch, getGroupBetsForMatch, adminUpsertBetForMatch, adminClearBetForMatch } from '@/lib/matches';
+import type { Match, Bet } from '@/lib/matches';
 import { getCricketMatches } from '@/lib/cricapi';
 import type { CricMatch } from '@/lib/cricapi';
 
 type ResultOption = 'team_a' | 'team_b' | 'draw' | 'abandoned';
+type BetPickOption = 'team_a' | 'team_b' | 'draw';
+type MemberBetDraft = { pickedOutcome: '' | BetPickOption; stake: string };
 
 const INPUT_CLASS =
   'w-full rounded-lg bg-[var(--bg-input)] border border-[var(--border)] px-4 py-2.5 text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent';
@@ -75,6 +77,14 @@ function getResultLabel(match: Match): string {
   return match.result;
 }
 
+
+
+function getBetLabel(match: Match, pickedOutcome: Bet['pickedOutcome']): string {
+  if (pickedOutcome === 'team_a') return match.teamA;
+  if (pickedOutcome === 'team_b') return match.teamB;
+  return 'Draw';
+}
+
 function StatusBadge({ status }: { status: Match['status'] }) {
   const styles: Record<Match['status'], string> = {
     live: 'bg-green-500/20 text-green-400',
@@ -100,6 +110,7 @@ function GroupAdminContent() {
   // access state
   const [isAdmin, setIsAdmin] = useState<boolean | undefined>(undefined);
   const [group, setGroup] = useState<Group | null>(null);
+  const [members, setMembers] = useState<GroupMember[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [retryKey, setRetryKey] = useState(0);
 
@@ -120,6 +131,11 @@ function GroupAdminContent() {
   const [selectedResult, setSelectedResult] = useState<Record<string, ResultOption>>({});
   const [declaring, setDeclaring] = useState<Record<string, boolean>>({});
   const [togglingBet, setTogglingBet] = useState<Record<string, boolean>>({});
+  const [managingBetsFor, setManagingBetsFor] = useState<Match | null>(null);
+  const [matchBets, setMatchBets] = useState<Record<string, Bet | null>>({});
+  const [betDrafts, setBetDrafts] = useState<Record<string, MemberBetDraft>>({});
+  const [savingMemberBets, setSavingMemberBets] = useState<Record<string, boolean>>({});
+  const [loadingManageBets, setLoadingManageBets] = useState(false);
 
   // edit state
   const [editingMatch, setEditingMatch] = useState<Match | null>(null);
@@ -149,11 +165,13 @@ function GroupAdminContent() {
       getUserGroupMember(groupId, user.uid),
       getGroupById(groupId),
       getMatches(groupId),
-    ]).then(([member, g, mats]) => {
+      getGroupMembers(groupId),
+    ]).then(([member, g, mats, loadedMembers]) => {
       if (cancelled) return;
       setIsAdmin(member?.role === 'admin');
       setGroup(g);
       setMatches(mats);
+      setMembers(loadedMembers);
     }).catch((err) => {
       if (cancelled) return;
       if ((err as { code?: string })?.code === 'permission-denied') {
@@ -182,6 +200,108 @@ function GroupAdminContent() {
   async function refreshMatches() {
     const mats = await getMatches(groupId);
     setMatches(mats);
+  }
+
+  async function refreshMembers() {
+    const loadedMembers = await getGroupMembers(groupId);
+    setMembers(loadedMembers);
+  }
+
+  async function loadManageBets(match: Match) {
+    setLoadingManageBets(true);
+    try {
+      const [loadedMembers, bets] = await Promise.all([
+        getGroupMembers(groupId),
+        getGroupBetsForMatch(match.id, groupId),
+      ]);
+
+      const betsByUser: Record<string, Bet | null> = {};
+      const draftsByUser: Record<string, MemberBetDraft> = {};
+
+      for (const member of loadedMembers) {
+        const existingBet = bets.find((bet) => bet.userId === member.userId) ?? null;
+        betsByUser[member.userId] = existingBet;
+        draftsByUser[member.userId] = {
+          pickedOutcome: existingBet?.pickedOutcome ?? '',
+          stake: existingBet ? String(existingBet.stake) : '',
+        };
+      }
+
+      setMembers(loadedMembers);
+      setMatchBets(betsByUser);
+      setBetDrafts(draftsByUser);
+      setManagingBetsFor(match);
+    } finally {
+      setLoadingManageBets(false);
+    }
+  }
+
+  async function openManageBets(match: Match) {
+    try {
+      await loadManageBets(match);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to load match bets');
+    }
+  }
+
+  function updateBetDraft(userId: string, field: keyof MemberBetDraft, value: string) {
+    setBetDrafts((prev) => ({
+      ...prev,
+      [userId]: {
+        pickedOutcome: prev[userId]?.pickedOutcome ?? '',
+        stake: prev[userId]?.stake ?? '',
+        [field]: value,
+      },
+    }));
+  }
+
+  async function handleSaveMemberBet(userId: string) {
+    if (!managingBetsFor) return;
+
+    const draft = betDrafts[userId];
+    if (!draft?.pickedOutcome) {
+      toast.error('Select a bet option');
+      return;
+    }
+
+    const stake = Number(draft.stake);
+    if (!Number.isFinite(stake) || stake <= 0) {
+      toast.error('Enter a valid stake greater than 0');
+      return;
+    }
+
+    setSavingMemberBets((prev) => ({ ...prev, [userId]: true }));
+    try {
+      await adminUpsertBetForMatch(managingBetsFor.id, groupId, userId, {
+        pickedOutcome: draft.pickedOutcome,
+        stake,
+      });
+      await refreshMembers();
+      await loadManageBets(managingBetsFor);
+      await refreshMatches();
+      toast.success('Bet saved');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save bet');
+    } finally {
+      setSavingMemberBets((prev) => ({ ...prev, [userId]: false }));
+    }
+  }
+
+  async function handleClearMemberBet(userId: string) {
+    if (!managingBetsFor) return;
+
+    setSavingMemberBets((prev) => ({ ...prev, [userId]: true }));
+    try {
+      await adminClearBetForMatch(managingBetsFor.id, groupId, userId);
+      await refreshMembers();
+      await loadManageBets(managingBetsFor);
+      await refreshMatches();
+      toast.success('Bet cleared');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to clear bet');
+    } finally {
+      setSavingMemberBets((prev) => ({ ...prev, [userId]: false }));
+    }
   }
 
   async function handleFetchCricMatches() {
@@ -382,7 +502,11 @@ function GroupAdminContent() {
       toast.success(match.status === 'completed' || match.status === 'abandoned'
         ? 'Result updated and points re-settled!'
         : 'Result declared and points settled!');
+      await refreshMembers();
       await refreshMatches();
+      if (managingBetsFor?.id === match.id) {
+        await loadManageBets(match);
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to declare result');
     } finally {
@@ -439,6 +563,122 @@ function GroupAdminContent() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
+
+      {managingBetsFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6">
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="font-semibold text-[var(--text-primary)]">Manage Member Bets</h3>
+                <p className="text-sm text-[var(--text-secondary)] mt-1">
+                  {managingBetsFor.teamA} vs {managingBetsFor.teamB} · {formatMatchDate(managingBetsFor.matchDate)}
+                </p>
+                <p className="text-xs text-[var(--text-muted)] mt-1">
+                  Add, update, or clear any member bet. Finished matches will automatically re-settle points after each change.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setManagingBetsFor(null)}
+                className="shrink-0 rounded-lg border border-[var(--border)] bg-[var(--bg-input)] hover:bg-[var(--bg-hover)] px-3 py-2 text-sm text-[var(--text-primary)] transition-colors"
+              >
+                Close
+              </button>
+            </div>
+
+            {loadingManageBets ? (
+              <div className="py-10 text-center text-sm text-[var(--text-muted)]">Loading member bets…</div>
+            ) : members.length === 0 ? (
+              <div className="py-10 text-center text-sm text-[var(--text-muted)]">No group members found.</div>
+            ) : (
+              <div className="space-y-3">
+                {members.map((member) => {
+                  const currentBet = matchBets[member.userId];
+                  const draft = betDrafts[member.userId] ?? { pickedOutcome: '', stake: '' };
+                  const isSaving = savingMemberBets[member.userId];
+                  return (
+                    <div key={member.userId} className="rounded-xl border border-[var(--border)] bg-[var(--bg-input)] p-4 space-y-3">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div
+                            className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-semibold shrink-0"
+                            style={{ backgroundColor: member.avatarColor }}
+                          >
+                            {member.displayName.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-medium text-[var(--text-primary)] truncate">{member.displayName}</span>
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--bg-card)] border border-[var(--border)] text-[var(--text-secondary)]">
+                                {member.role}
+                              </span>
+                            </div>
+                            <p className="text-xs text-[var(--text-muted)]">Total points: {member.totalPoints}</p>
+                          </div>
+                        </div>
+                        <div className="text-right text-xs text-[var(--text-secondary)]">
+                          {currentBet ? (
+                            <>
+                              <div>Current bet: {getBetLabel(managingBetsFor, currentBet.pickedOutcome)} · {currentBet.stake} pts</div>
+                              <div>Status: {currentBet.status}</div>
+                            </>
+                          ) : (
+                            <div>No bet recorded yet</div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_160px_auto_auto] gap-3 items-end">
+                        <div>
+                          <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Pick</label>
+                          <select
+                            value={draft.pickedOutcome}
+                            onChange={(e) => updateBetDraft(member.userId, 'pickedOutcome', e.target.value)}
+                            className={INPUT_CLASS}
+                          >
+                            <option value="">Select outcome...</option>
+                            <option value="team_a">{managingBetsFor.teamA}</option>
+                            <option value="team_b">{managingBetsFor.teamB}</option>
+                            {managingBetsFor.drawAllowed && <option value="draw">Draw</option>}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-[var(--text-secondary)] mb-1">Stake</label>
+                          <input
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={draft.stake}
+                            onChange={(e) => updateBetDraft(member.userId, 'stake', e.target.value)}
+                            className={INPUT_CLASS}
+                            placeholder="Points"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleSaveMemberBet(member.userId)}
+                          disabled={isSaving}
+                          className="rounded-lg bg-green-500 hover:bg-green-600 disabled:opacity-60 disabled:cursor-not-allowed px-4 py-2.5 text-sm font-semibold text-white transition-colors"
+                        >
+                          {isSaving ? 'Saving…' : currentBet ? 'Update Bet' : 'Add Bet'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleClearMemberBet(member.userId)}
+                          disabled={isSaving || !currentBet}
+                          className="rounded-lg border border-[var(--border)] bg-[var(--bg-card)] hover:bg-[var(--bg-hover)] disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2.5 text-sm font-medium text-[var(--text-primary)] transition-colors"
+                        >
+                          Clear Bet
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Edit modal ── */}
       {editingMatch && (
@@ -786,9 +1026,14 @@ function GroupAdminContent() {
                         <span className="ml-2 text-xs font-medium px-2 py-0.5 rounded-full bg-[var(--bg-input)] text-[var(--text-secondary)]">
                           {match.format}
                         </span>
-                      </div>
-                      <div className="flex items-center gap-2">
+                      </div>                      <div className="flex items-center gap-2 flex-wrap justify-end">
                         <StatusBadge status={match.status} />
+                        <button
+                          onClick={() => openManageBets(match)}
+                          className="text-xs font-medium px-2.5 py-1 rounded-lg bg-[var(--bg-input)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border)] transition-colors"
+                        >
+                          Manage Bets
+                        </button>
                         <button
                           onClick={() => openEdit(match)}
                           className="text-xs font-medium px-2.5 py-1 rounded-lg bg-[var(--bg-input)] hover:bg-[var(--bg-hover)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] border border-[var(--border)] transition-colors"
@@ -853,7 +1098,7 @@ function GroupAdminContent() {
 
                     {(match.status === 'completed' || match.status === 'abandoned') && (
                       <p className="text-xs text-[var(--text-muted)]">
-                        Updating a declared match will roll back old points and settle again using the new result.
+                        Updating a declared match or member bet will roll back old points and settle again using the latest data.
                       </p>
                     )}
                   </div>
@@ -874,6 +1119,25 @@ export default function GroupAdminPage() {
     </ProtectedRoute>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
