@@ -81,7 +81,7 @@ function RegisterForm() {
     <div className="min-h-screen bg-[var(--bg-primary)] flex items-center justify-center px-4">
       <div className="w-full max-w-md bg-[var(--bg-card)] rounded-2xl p-8 shadow-xl border border-[var(--border)]">
         <div className="mb-6 text-center">
-          <h1 className="text-3xl font-bold text-green-500">🏆 WhoWins</h1>
+          <Link href="/" className="text-3xl font-bold text-green-500 hover:text-green-400 transition-colors">🏆 WhoWins</Link>
           <p className="mt-2 text-[var(--text-secondary)] text-sm">Create your account</p>
         </div>
 
@@ -208,3 +208,4 @@ export default function RegisterPage() {
     </Suspense>
   );
 }
+

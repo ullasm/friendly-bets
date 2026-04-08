@@ -47,7 +47,7 @@ function GroupsContent() {
       {/* Navbar */}
       <header className="bg-[var(--bg-card)] border-b border-[var(--border)] px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
-          <h1 className="text-xl font-bold text-green-500">🏆 WhoWins</h1>
+          <Link href="/" className="text-xl font-bold text-green-500 hover:text-green-400 transition-colors">🏆 WhoWins</Link>
           <div className="flex items-center gap-3">
             <ThemeSwitcher />
             {userProfile && (
@@ -158,3 +158,4 @@ export default function GroupsPage() {
     </ProtectedRoute>
   );
 }
+

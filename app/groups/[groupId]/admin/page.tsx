@@ -784,7 +784,7 @@ function GroupAdminContent() {
               </svg>
             </Link>
             <div className="min-w-0">
-              <span className="text-base font-bold text-green-500 block">🏆 WhoWins</span>
+              <Link href="/" className="text-base font-bold text-green-500 block hover:text-green-400 transition-colors">🏆 WhoWins</Link>
               {group && (
                 <span className="text-xs text-[var(--text-secondary)] truncate block">{group.name} · Admin</span>
               )}
@@ -1126,6 +1126,7 @@ export default function GroupAdminPage() {
     </ProtectedRoute>
   );
 }
+
 
 
 
