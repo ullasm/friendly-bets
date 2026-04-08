@@ -6,7 +6,7 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { useAuth } from '@/lib/AuthContext';
-import { getMatchById, getUserBetForMatch, placeBet } from '@/lib/matches';
+import { getMatchById, getUserBetForMatch, upsertUserBetForMatch } from '@/lib/matches';
 import type { Match, Bet } from '@/lib/matches';
 import { getUserGroupMember } from '@/lib/groups';
 import type { GroupMember } from '@/lib/groups';
@@ -40,19 +40,6 @@ function StatusBadge({ status }: { status: Match['status'] }) {
   );
 }
 
-function BetStatusBadge({ status }: { status: Bet['status'] }) {
-  const styles: Record<Bet['status'], string> = {
-    pending: 'bg-yellow-500/20 text-yellow-400',
-    won: 'bg-green-500/20 text-green-400',
-    lost: 'bg-red-500/20 text-red-400',
-    refunded: 'bg-slate-600/40 text-[var(--text-muted)]',
-  };
-  return (
-    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${styles[status]}`}>
-      {status.charAt(0).toUpperCase() + status.slice(1)}
-    </span>
-  );
-}
 
 function BackLink({ groupId }: { groupId: string }) {
   return (
@@ -143,6 +130,7 @@ function BetContent() {
         setMatch(m);
         setExistingBet(bet);
         setMember(mem);
+        setSelected((bet?.pickedOutcome as Outcome | undefined) ?? null);
       })
       .catch((err) => {
         if (cancelled) return;
@@ -161,8 +149,9 @@ function BetContent() {
     if (!selected || !user) return;
     setConfirming(true);
     try {
-      await placeBet(matchId, groupId, user.uid, selected, STAKE);
-      toast.success('Bet placed successfully!');
+      const wasExistingBet = existingBet !== null;
+      await upsertUserBetForMatch(matchId, groupId, user.uid, selected, STAKE);
+      toast.success(wasExistingBet ? 'Bet updated successfully!' : 'Bet placed successfully!');
       router.replace(`/groups/${groupId}`);
     } catch (err) {
       toast.error(getBetActionErrorMessage(err));
@@ -222,50 +211,6 @@ function BetContent() {
     return <InfoScreen groupId={groupId} message="Betting is currently closed for this match." />;
   }
 
-  // ── existing bet ─────────────────────────────────────────────────────────
-  if (existingBet) {
-    const outcomeLabel: Record<Outcome, string> = {
-      team_a: match.teamA,
-      team_b: match.teamB,
-      draw: 'Draw',
-    };
-    const delta = existingBet.pointsDelta;
-
-    return (
-      <div className="min-h-screen bg-[var(--bg-primary)] flex flex-col items-center justify-center gap-4 px-4">
-        <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-8 max-w-sm w-full text-center space-y-3">
-          <div className="text-green-400 text-4xl">✓</div>
-          <h2 className="text-lg font-semibold text-[var(--text-primary)]">Your bet is placed!</h2>
-
-          <div className="space-y-2 text-sm">
-            <p className="text-[var(--text-secondary)]">
-              Picked:{' '}
-              <span className="font-medium text-[var(--text-primary)]">
-                {outcomeLabel[existingBet.pickedOutcome as Outcome]}
-              </span>
-            </p>
-            <p className="text-[var(--text-secondary)]">
-              Stake: <span className="font-medium text-[var(--text-primary)]">{existingBet.stake} pts</span>
-            </p>
-            <div className="flex items-center justify-center gap-2">
-              <BetStatusBadge status={existingBet.status} />
-              {delta !== null && existingBet.status === 'won' && (
-                <span className="text-green-400 font-semibold">+{delta} pts</span>
-              )}
-              {delta !== null && existingBet.status === 'lost' && (
-                <span className="text-red-400 font-semibold">{delta} pts</span>
-              )}
-            </div>
-          </div>
-
-          <div className="pt-2">
-            <BackLink groupId={groupId} />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   // ── main betting UI ──────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
@@ -292,6 +237,18 @@ function BetContent() {
             </p>
           </div>
         </div>
+
+        {existingBet && (
+          <div className="rounded-xl border border-[var(--border)] bg-[var(--bg-card)] p-4 space-y-2">
+            <p className="text-xs font-semibold text-[var(--text-secondary)]">Current bet</p>
+            <div className="text-sm text-[var(--text-secondary)]">
+              Picked: <span className="font-medium text-[var(--text-primary)]">{existingBet.pickedOutcome === 'team_a' ? match.teamA : existingBet.pickedOutcome === 'team_b' ? match.teamB : 'Draw'}</span>
+            </div>
+            <div className="text-sm text-[var(--text-secondary)]">
+              Stake: <span className="font-medium text-[var(--text-primary)]">{existingBet.stake} pts</span>
+            </div>
+          </div>
+        )}
 
         {/* Outcome picker */}
         <div className="space-y-3">
@@ -339,7 +296,7 @@ function BetContent() {
                 Placing bet…
               </>
             ) : (
-              'Confirm Bet'
+              existingBet ? 'Update Bet' : 'Confirm Bet'
             )}
           </button>
         )}
@@ -355,6 +312,9 @@ export default function GroupBetPage() {
     </ProtectedRoute>
   );
 }
+
+
+
 
 
 

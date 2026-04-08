@@ -125,6 +125,38 @@ export async function placeBet(
   return ref.id;
 }
 
+export async function upsertUserBetForMatch(
+  matchId: string,
+  groupId: string,
+  userId: string,
+  pickedOutcome: 'team_a' | 'team_b' | 'draw',
+  stake: number
+): Promise<string> {
+  const match = await getMatchById(matchId);
+  if (!match) {
+    throw new Error('Match not found');
+  }
+
+  const canEditBet = (match.status === 'upcoming' || match.status === 'live') && match.bettingOpen;
+  if (!canEditBet) {
+    throw new Error('Betting is closed for this match');
+  }
+
+  const existingBet = await getUserBetForMatch(matchId, userId);
+  if (existingBet) {
+    await updateDoc(doc(db, 'bets', existingBet.id), {
+      pickedOutcome,
+      stake,
+      status: 'pending',
+      pointsDelta: null,
+      placedAt: serverTimestamp(),
+    });
+    return existingBet.id;
+  }
+
+  return placeBet(matchId, groupId, userId, pickedOutcome, stake);
+}
+
 export async function getUserBetsForGroup(
   groupId: string,
   userId: string
@@ -408,6 +440,7 @@ export async function getAllUsers(): Promise<LeaderboardUser[]> {
   );
   return snap.docs.map((d) => d.data() as LeaderboardUser);
 }
+
 
 
 

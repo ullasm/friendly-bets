@@ -74,14 +74,23 @@ service cloud.firestore {
           && isGroupMember(request.resource.data.groupId)) ||
         isGroupAdmin(request.resource.data.groupId)
       );
-      allow update: if isGroupAdmin(resource.data.groupId);
+      allow update: if isGroupAdmin(resource.data.groupId) || (
+        isSignedIn() &&
+        request.auth.uid == resource.data.userId &&
+        isGroupMember(resource.data.groupId) &&
+        resource.data.status == 'pending' &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.groupId == resource.data.groupId &&
+        request.resource.data.matchId == resource.data.matchId &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.pointsDelta == null &&
+        get(/databases/$(database)/documents/matches/$(resource.data.matchId)).data.bettingOpen == true &&
+        (
+          get(/databases/$(database)/documents/matches/$(resource.data.matchId)).data.status == 'upcoming' ||
+          get(/databases/$(database)/documents/matches/$(resource.data.matchId)).data.status == 'live'
+        )
+      );
       allow delete: if isGroupAdmin(resource.data.groupId);
     }
   }
 }
-
-
-
-
-
-

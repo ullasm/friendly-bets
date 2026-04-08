@@ -10,7 +10,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { logoutUser } from '@/lib/auth';
 import { getGroupById, getUserGroupMember, getGroupMembers } from '@/lib/groups';
 import type { Group, GroupMember } from '@/lib/groups';
-import { getBetsForGroup, getBetsForMatch, getMatches, getUserBetsForGroup } from '@/lib/matches';
+import { getBetsForGroup, getBetsForMatch, getMatches, getUserBetsForGroup, upsertUserBetForMatch } from '@/lib/matches';
 import type { Match, Bet } from '@/lib/matches';
 import { copyText, getInviteLink } from '@/lib/share';
 
@@ -58,6 +58,10 @@ function StatusBadge({ status }: { status: Match['status'] }) {
   );
 }
 
+const BET_STAKE = 1000;
+
+type Outcome = 'team_a' | 'team_b' | 'draw';
+
 const BET_STATUS_STYLES: Record<Bet['status'], string> = {
   pending: 'bg-yellow-500/20 text-yellow-400',
   won: 'bg-green-500/20 text-green-400',
@@ -65,6 +69,12 @@ const BET_STATUS_STYLES: Record<Bet['status'], string> = {
   refunded: 'bg-slate-600/40 text-[var(--text-muted)]',
 };
 
+function getBetActionErrorMessage(err: unknown): string {
+  if ((err as { code?: string })?.code === 'permission-denied') {
+    return 'Could not update bet due to Firestore permissions. Publish latest rules and try again.';
+  }
+  return err instanceof Error ? err.message : 'Failed to update bet';
+}
 function getPickedLabel(match: Match, pickedOutcome: Bet['pickedOutcome']) {
   if (pickedOutcome === 'team_a') return match.teamA;
   if (pickedOutcome === 'team_b') return match.teamB;
@@ -98,9 +108,10 @@ interface MatchCardProps {
   bets: Bet[];
   memberNames: Record<string, string>;
   currentUserId?: string;
+  onBetUpdated: (updatedBet: Bet) => void;
 }
 
-function MatchCard({ match, groupId, myBet, bets, memberNames, currentUserId }: MatchCardProps) {
+function MatchCard({ match, groupId, myBet, bets, memberNames, currentUserId, onBetUpdated }: MatchCardProps) {
   const canBet =
     (match.status === 'live' || match.status === 'upcoming') && match.bettingOpen;
 
@@ -121,6 +132,39 @@ function MatchCard({ match, groupId, myBet, bets, memberNames, currentUserId }: 
   const winningEntries = pointSummary.filter((entry) => entry.pointsDelta > 0);
   const losingEntries = pointSummary.filter((entry) => entry.pointsDelta < 0);
   const refundedEntries = pointSummary.filter((entry) => entry.pointsDelta === 0);
+
+  const [editingBet, setEditingBet] = useState(false);
+  const [selectedOutcome, setSelectedOutcome] = useState<Outcome | null>((myBet?.pickedOutcome as Outcome | undefined) ?? null);
+  const [updatingBet, setUpdatingBet] = useState(false);
+
+  useEffect(() => {
+    setSelectedOutcome((myBet?.pickedOutcome as Outcome | undefined) ?? null);
+    setEditingBet(false);
+  }, [myBet?.id, myBet?.pickedOutcome]);
+
+  const canChangeBet = Boolean(myBet && myBet.status === 'pending') && canBet && Boolean(currentUserId);
+
+  async function handleChangeBet() {
+    if (!currentUserId || !myBet || !selectedOutcome) return;
+    setUpdatingBet(true);
+    try {
+      await upsertUserBetForMatch(match.id, groupId, currentUserId, selectedOutcome, BET_STAKE);
+      const updatedBet: Bet = {
+        ...myBet,
+        pickedOutcome: selectedOutcome,
+        stake: BET_STAKE,
+        status: 'pending',
+        pointsDelta: null,
+      };
+      onBetUpdated(updatedBet);
+      setEditingBet(false);
+      toast.success('Bet updated successfully!');
+    } catch (err) {
+      toast.error(getBetActionErrorMessage(err));
+    } finally {
+      setUpdatingBet(false);
+    }
+  }
 
   return (
     <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-xl p-[var(--card-padding)] flex flex-col gap-3">
@@ -151,6 +195,15 @@ function MatchCard({ match, groupId, myBet, bets, memberNames, currentUserId }: 
             {myBet.pointsDelta !== null && myBet.status === 'lost' && (
               <span className="text-xs font-semibold text-red-400">{myBet.pointsDelta} pts</span>
             )}
+            {canChangeBet && (
+              <button
+                type="button"
+                onClick={() => setEditingBet(true)}
+                className="text-xs font-medium px-3 py-1.5 rounded-lg bg-[var(--bg-input)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] border border-[var(--border)] transition-colors"
+              >
+                Change bet
+              </button>
+            )}
           </div>
         ) : canBet ? (
           <Link
@@ -161,6 +214,66 @@ function MatchCard({ match, groupId, myBet, bets, memberNames, currentUserId }: 
           </Link>
         ) : null}
       </div>
+      {editingBet && (
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-input)] px-3 py-3 space-y-3">
+          <p className="text-xs font-semibold text-[var(--text-secondary)]">Change your bet</p>
+          <div className={`grid gap-2 ${match.drawAllowed ? 'grid-cols-3' : 'grid-cols-2'}`}>
+            <button
+              type="button"
+              onClick={() => setSelectedOutcome('team_a')}
+              className={`rounded-lg px-3 py-2 text-sm font-semibold border transition-colors ${
+                selectedOutcome === 'team_a'
+                  ? 'bg-blue-500/20 text-blue-400 border-blue-400/50'
+                  : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--border)] hover:bg-[var(--bg-hover)]'
+              }`}
+            >
+              {match.teamA}
+            </button>
+            {match.drawAllowed && (
+              <button
+                type="button"
+                onClick={() => setSelectedOutcome('draw')}
+                className={`rounded-lg px-3 py-2 text-sm font-semibold border transition-colors ${
+                  selectedOutcome === 'draw'
+                    ? 'bg-slate-500/30 text-[var(--text-primary)] border-slate-300/40'
+                    : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--border)] hover:bg-[var(--bg-hover)]'
+                }`}
+              >
+                Draw
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setSelectedOutcome('team_b')}
+              className={`rounded-lg px-3 py-2 text-sm font-semibold border transition-colors ${
+                selectedOutcome === 'team_b'
+                  ? 'bg-red-500/20 text-red-400 border-red-400/50'
+                  : 'bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--border)] hover:bg-[var(--bg-hover)]'
+              }`}
+            >
+              {match.teamB}
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={handleChangeBet}
+            disabled={!selectedOutcome || updatingBet}
+            className="w-full rounded-lg bg-green-500 hover:bg-green-600 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold py-2.5 transition-colors"
+          >
+            {updatingBet ? 'Updating…' : 'Confirm change'}
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setEditingBet(false);
+              setSelectedOutcome((myBet?.pickedOutcome as Outcome | undefined) ?? null);
+            }}
+            className="w-full text-sm text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
       {(bets.length > 0 || hasSettledSummary) && (
         <div className="rounded-lg border border-[var(--border)] bg-[var(--bg-input)] px-3 py-3 space-y-3">
           {hasSettledSummary && (
@@ -258,7 +371,6 @@ function MatchCard({ match, groupId, myBet, bets, memberNames, currentUserId }: 
     </div>
   );
 }
-
 interface PastMatchCardProps {
   match: Match;
   bets: Bet[];
@@ -510,6 +622,17 @@ function GroupDashboardContent() {
     }
   }
 
+  function handleMyBetUpdated(updatedBet: Bet) {
+    setMyBets((prev) => ({ ...prev, [updatedBet.matchId]: updatedBet }));
+    setGroupBets((prev) => {
+      const existing = prev[updatedBet.matchId] ?? [];
+      const others = existing.filter((bet) => bet.id !== updatedBet.id);
+      return {
+        ...prev,
+        [updatedBet.matchId]: [...others, updatedBet],
+      };
+    });
+  }
   async function copyInviteLink() {
     if (!group) return;
     const link = getInviteLink(group.inviteCode);
@@ -653,6 +776,7 @@ function GroupDashboardContent() {
                   bets={groupBets[m.id] ?? []}
                   memberNames={memberNames}
                   currentUserId={user?.uid}
+                  onBetUpdated={handleMyBetUpdated}
                 />
               ))}
             </div>
@@ -675,6 +799,7 @@ function GroupDashboardContent() {
                   bets={groupBets[m.id] ?? []}
                   memberNames={memberNames}
                   currentUserId={user?.uid}
+                  onBetUpdated={handleMyBetUpdated}
                 />
               ))}
             </div>
@@ -789,6 +914,9 @@ export default function GroupDashboardPage() {
     </ProtectedRoute>
   );
 }
+
+
+
 
 
 
