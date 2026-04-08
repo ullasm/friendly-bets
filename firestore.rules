@@ -33,7 +33,7 @@ service cloud.firestore {
       allow list: if isSignedIn();
       allow create: if isSignedIn();
       allow update: if isGroupAdmin(groupId);
-      allow delete: if false;
+      allow delete: if isGroupAdmin(groupId);
 
       // Members subcollection
       match /members/{memberId} {

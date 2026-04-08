@@ -18,6 +18,7 @@ import {
   demoteMember,
   removeMember,
   updateMemberDisplayName,
+  deleteGroupCascade,
 } from '@/lib/groups';
 import type { Group, GroupMember } from '@/lib/groups';
 import { copyText, getInviteLink } from '@/lib/share';
@@ -48,6 +49,9 @@ function ManageContent() {
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
   const [memberNameInput, setMemberNameInput] = useState('');
   const [confirmRemove, setConfirmRemove] = useState<GroupMember | null>(null);
+  const [confirmDeleteGroup, setConfirmDeleteGroup] = useState(false);
+  const [deleteGroupInput, setDeleteGroupInput] = useState('');
+  const [deletingGroup, setDeletingGroup] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -177,6 +181,27 @@ function ManageContent() {
     }
   }
 
+
+  async function handleDeleteGroup() {
+    if (!user || !group) return;
+
+    const expectedName = group.name.trim();
+    if (deleteGroupInput.trim() !== expectedName) {
+      toast.error('Type the exact group name to confirm deletion');
+      return;
+    }
+
+    setDeletingGroup(true);
+    try {
+      await deleteGroupCascade(groupId, user.uid);
+      toast.success('Group deleted');
+      router.replace('/groups');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to delete group');
+    } finally {
+      setDeletingGroup(false);
+    }
+  }
   function startEditingMemberName(member: GroupMember) {
     setEditingMemberId(member.userId);
     setMemberNameInput(member.displayName);
@@ -254,6 +279,47 @@ function ManageContent() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
+      {/* Confirm delete group modal */}
+      {confirmDeleteGroup && group && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <div className="bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl p-6 max-w-md w-full space-y-4">
+            <h3 className="font-semibold text-[var(--text-primary)]">Delete group?</h3>
+            <p className="text-sm text-[var(--text-secondary)]">
+              This will permanently delete the group, all matches, all bets, and all member links. This action cannot be undone.
+            </p>
+            <div className="space-y-2">
+              <label className="block text-xs text-[var(--text-muted)]">
+                Type <span className="font-semibold text-[var(--text-primary)]">{group.name}</span> to confirm
+              </label>
+              <input
+                type="text"
+                value={deleteGroupInput}
+                onChange={(e) => setDeleteGroupInput(e.target.value)}
+                className="w-full rounded-lg bg-[var(--bg-input)] border border-[var(--border)] px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                autoFocus
+              />
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setConfirmDeleteGroup(false);
+                  setDeleteGroupInput('');
+                }}
+                className="flex-1 rounded-lg border border-[var(--border)] bg-[var(--bg-input)] hover:bg-[var(--bg-hover)] text-[var(--text-primary)] text-sm font-medium py-2 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteGroup}
+                disabled={deletingGroup || deleteGroupInput.trim() !== group.name.trim()}
+                className="flex-1 rounded-lg bg-red-500 hover:bg-red-600 disabled:opacity-60 text-white text-sm font-semibold py-2 transition-colors"
+              >
+                {deletingGroup ? 'Deleting…' : 'Delete Group'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Confirm remove modal */}
       {confirmRemove && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
@@ -556,6 +622,23 @@ function ManageContent() {
             })}
           </ul>
         </div>
+
+        {/* ── Section 4: Danger Zone ── */}
+        <div className="bg-[var(--bg-card)] border border-red-500/30 rounded-xl p-[var(--card-padding)] space-y-3">
+          <h2 className="text-lg font-semibold text-red-400">Danger Zone</h2>
+          <p className="text-sm text-[var(--text-secondary)]">
+            Deleting a group removes all matches, bets, and member records permanently.
+          </p>
+          <button
+            onClick={() => {
+              setDeleteGroupInput('');
+              setConfirmDeleteGroup(true);
+            }}
+            className="rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 text-sm font-semibold px-4 py-2.5 transition-colors"
+          >
+            Delete Group
+          </button>
+        </div>
       </main>
     </div>
   );
@@ -568,6 +651,8 @@ export default function ManagePage() {
     </ProtectedRoute>
   );
 }
+
+
 
 
 

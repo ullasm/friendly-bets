@@ -13,6 +13,7 @@ import {
   orderBy,
   serverTimestamp,
   arrayUnion,
+  arrayRemove,
 } from 'firebase/firestore';
 import type { Timestamp } from 'firebase/firestore';
 import { db } from './firebase';
@@ -240,3 +241,39 @@ export async function updateMemberDisplayName(
 ): Promise<void> {
   await updateDoc(doc(db, 'groups', groupId, 'members', userId), { displayName });
 }
+
+export async function deleteGroupCascade(groupId: string, adminUserId: string): Promise<void> {
+  const admin = await getUserGroupMember(groupId, adminUserId);
+  if (!admin || admin.role !== 'admin') {
+    throw new Error('Admin privileges required to delete this group');
+  }
+
+  const [betsSnap, matchesSnap, membersSnap] = await Promise.all([
+    getDocs(query(collection(db, 'bets'), where('groupId', '==', groupId))),
+    getDocs(query(collection(db, 'matches'), where('groupId', '==', groupId))),
+    getDocs(collection(db, 'groups', groupId, 'members')),
+  ]);
+
+  await Promise.all(betsSnap.docs.map((d) => deleteDoc(doc(db, 'bets', d.id))));
+  await Promise.all(matchesSnap.docs.map((d) => deleteDoc(doc(db, 'matches', d.id))));
+
+  // Delete the group doc before member docs are removed to keep admin checks valid.
+  await deleteDoc(doc(db, 'groups', groupId));
+
+  const adminMemberDoc = membersSnap.docs.find((d) => d.id === adminUserId);
+  const otherMemberDocs = membersSnap.docs.filter((d) => d.id !== adminUserId);
+
+  // Remove other members first while the admin membership doc still exists.
+  await Promise.all(otherMemberDocs.map((d) => deleteDoc(d.ref)));
+
+  // Remove the deleting admin membership last.
+  if (adminMemberDoc) {
+    await deleteDoc(adminMemberDoc.ref);
+  }
+
+  // Best-effort cleanup for the deleting admin's cached groupIds array.
+  await updateDoc(doc(db, 'users', adminUserId), {
+    groupIds: arrayRemove(groupId),
+  });
+}
+
