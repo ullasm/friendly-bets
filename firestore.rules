@@ -50,6 +50,10 @@ service cloud.firestore {
       }
     }
 
+    // System cache used by the server route for CricAPI throttling.
+    match /systemCache/{cacheId} {
+      allow read, write: if true;
+    }
     // Matches — scoped to group membership
     match /matches/{matchId} {
       allow read: if isSignedIn() && isGroupMember(resource.data.groupId);
@@ -75,6 +79,8 @@ service cloud.firestore {
     }
   }
 }
+
+
 
 
 

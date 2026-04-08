@@ -17,6 +17,7 @@ import {
   promoteMember,
   demoteMember,
   removeMember,
+  updateMemberDisplayName,
 } from '@/lib/groups';
 import type { Group, GroupMember } from '@/lib/groups';
 import { copyText, getInviteLink } from '@/lib/share';
@@ -44,6 +45,8 @@ function ManageContent() {
 
   // member actions
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
+  const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
+  const [memberNameInput, setMemberNameInput] = useState('');
   const [confirmRemove, setConfirmRemove] = useState<GroupMember | null>(null);
 
   useEffect(() => {
@@ -171,6 +174,32 @@ function ManageContent() {
       toast.error('Failed to remove member');
     } finally {
       setMemberLoading(m.userId, false);
+    }
+  }
+
+  function startEditingMemberName(member: GroupMember) {
+    setEditingMemberId(member.userId);
+    setMemberNameInput(member.displayName);
+  }
+
+  async function handleSaveMemberName(member: GroupMember) {
+    const displayName = memberNameInput.trim();
+    if (displayName.length < 2) {
+      toast.error('Member name must be at least 2 characters');
+      return;
+    }
+
+    setMemberLoading(member.userId, true);
+    try {
+      await updateMemberDisplayName(groupId, member.userId, displayName);
+      toast.success('Member name updated');
+      setEditingMemberId(null);
+      setMemberNameInput('');
+      await refreshMembers();
+    } catch {
+      toast.error('Failed to update member name');
+    } finally {
+      setMemberLoading(member.userId, false);
     }
   }
 
@@ -425,10 +454,57 @@ function ManageContent() {
                   </div>
 
                   {/* Name + badges */}
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <span className="text-sm text-[var(--text-primary)] font-medium truncate">
-                      {m.displayName}
-                    </span>
+                  <div className="flex items-center gap-2 flex-1 min-w-0 flex-wrap">
+                    {editingMemberId === m.userId ? (
+                      <>
+                        <input
+                          type="text"
+                          value={memberNameInput}
+                          onChange={(e) => setMemberNameInput(e.target.value)}
+                          className="min-w-[180px] flex-1 rounded-lg bg-[var(--bg-card)] border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') handleSaveMemberName(m);
+                            if (e.key === 'Escape') {
+                              setEditingMemberId(null);
+                              setMemberNameInput('');
+                            }
+                          }}
+                        />
+                        <button
+                          onClick={() => handleSaveMemberName(m)}
+                          disabled={loading}
+                          className="text-xs font-medium px-2.5 py-1 rounded-lg bg-green-500 hover:bg-green-600 disabled:opacity-50 text-white transition-colors"
+                        >
+                          Save
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingMemberId(null);
+                            setMemberNameInput('');
+                          }}
+                          className="text-xs font-medium px-2.5 py-1 rounded-lg bg-[var(--bg-hover)] text-[var(--text-secondary)] transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span className="text-sm text-[var(--text-primary)] font-medium truncate">
+                          {m.displayName}
+                        </span>
+                        <button
+                          onClick={() => startEditingMemberName(m)}
+                          disabled={loading}
+                          className="text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-50 transition-colors"
+                          title="Edit member name"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+                      </>
+                    )}
                     {isMe && <span className="text-xs text-green-500">(you)</span>}
                     <span
                       className={`text-xs font-medium px-1.5 py-0.5 rounded ${
@@ -492,3 +568,7 @@ export default function ManagePage() {
     </ProtectedRoute>
   );
 }
+
+
+
+

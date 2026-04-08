@@ -231,3 +231,12 @@ export async function getUserGroupMember(
 export async function updateGroupName(groupId: string, name: string): Promise<void> {
   await updateDoc(doc(db, 'groups', groupId), { name });
 }
+
+
+export async function updateMemberDisplayName(
+  groupId: string,
+  userId: string,
+  displayName: string
+): Promise<void> {
+  await updateDoc(doc(db, 'groups', groupId, 'members', userId), { displayName });
+}
