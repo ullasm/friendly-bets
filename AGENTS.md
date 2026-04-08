@@ -40,11 +40,18 @@ Do this for every change, no matter how small. Never skip this step.
 <!-- BEGIN:prompt-storage-rules -->
 # Prompt Storage Rule
 
-When the user asks to create, generate, save, store, or update a prompt, always create or update a file in `prompts/`.
+When the user asks to create, generate, save, store, or update a prompt, always save it in `prompts/`.
 
-Use this filename format unless the user explicitly requests a different one:
+Default filename format:
 `prompt-YYYY-MM-DD.txt`
 
-Use the current date for the filename.
+If a prompt file for that date already exists, never overwrite it.
+Create the next available file using this format instead:
+`prompt-YYYY-MM-DD-01.txt`
+`prompt-YYYY-MM-DD-02.txt`
+and so on.
+
+Use the current date for the filename unless the user explicitly requests a different one.
 Prefer saving the prompt in the repository over returning it only in chat.
 <!-- END:prompt-storage-rules -->
+
