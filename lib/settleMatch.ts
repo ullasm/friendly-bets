@@ -289,19 +289,24 @@ export async function settleMatch(input: SettlementInput): Promise<SettlementSum
     share: Math.floor((bet.stake / totalWinnerStake) * distributedPot),
   }));
 
-  // Correct rounding shortfall: give remainder to the biggest winner stake
+  // Correct rounding shortfall: distribute 1 pt at a time to the top-N winners
+  // by stake (largest-remainder method), so no single winner gets more than +1
+  // extra relative to others at the same stake level.
   const totalAllocated    = rawShares.reduce((s, w) => s + w.share, 0);
   const roundingRemainder = distributedPot - totalAllocated;
 
   if (roundingRemainder > 0 && rawShares.length > 0) {
-    // Find index of winner with largest stake (stable sort, first in array wins ties)
-    let biggestIdx = 0;
-    for (let i = 1; i < rawShares.length; i++) {
-      if (rawShares[i].bet.stake > rawShares[biggestIdx].bet.stake) {
-        biggestIdx = i;
-      }
+    // Build a sorted index (desc stake, then original position as tiebreak)
+    const sortedIndices = rawShares
+      .map((_, i) => i)
+      .sort((a, b) =>
+        rawShares[b].bet.stake !== rawShares[a].bet.stake
+          ? rawShares[b].bet.stake - rawShares[a].bet.stake
+          : a - b
+      );
+    for (let r = 0; r < roundingRemainder; r++) {
+      rawShares[sortedIndices[r % sortedIndices.length]].share += 1;
     }
-    rawShares[biggestIdx].share += roundingRemainder;
   }
 
   let totalPayout = 0;
