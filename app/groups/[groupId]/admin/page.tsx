@@ -211,7 +211,7 @@ function GroupAdminContent() {
         betsByUser[member.userId] = existingBet;
         draftsByUser[member.userId] = {
           pickedOutcome: existingBet?.pickedOutcome ?? '',
-          stake: existingBet ? String(existingBet.stake) : '',
+          stake: existingBet ? String(existingBet.stake) : '1000',
         };
       }
 
@@ -584,7 +584,7 @@ function GroupAdminContent() {
               <div className="space-y-3">
                 {members.map((member) => {
                   const currentBet = matchBets[member.userId];
-                  const draft = betDrafts[member.userId] ?? { pickedOutcome: '', stake: '' };
+                  const draft = betDrafts[member.userId] ?? { pickedOutcome: '', stake: '1000' };
                   const isSaving = savingMemberBets[member.userId];
                   return (
                     <div key={member.userId} className="rounded-xl border border-[var(--border)] bg-[var(--bg-input)] p-4 space-y-3">

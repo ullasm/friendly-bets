@@ -53,7 +53,7 @@ export const Modal: FC<ModalProps> = ({
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6"
-      onClick={onClose}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
     >
       <Card
         variant="modal"
