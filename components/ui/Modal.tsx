@@ -2,7 +2,6 @@
 
 import type { FC, ReactNode } from 'react';
 import { useEffect } from 'react';
-import { Card } from './Card';
 
 type MaxWidth = 'sm' | 'md' | 'lg' | 'xl' | '4xl';
 
@@ -55,11 +54,9 @@ export const Modal: FC<ModalProps> = ({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6"
       onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
     >
-      <Card
-        variant="modal"
-        padding={padding ?? 'p-6'}
-        className={`w-full ${maxWidthClasses[maxWidth]} ${scrollable ? 'max-h-[90vh] overflow-y-auto' : ''} ${className}`}
-        onClick={(e: React.MouseEvent) => e.stopPropagation()}
+      <div
+        className={`w-full ${maxWidthClasses[maxWidth]} bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-xl ${padding ?? 'p-6'} ${scrollable ? 'max-h-[90vh] overflow-y-auto' : ''} ${className}`}
+        onClick={(e) => e.stopPropagation()}
       >
         {title && (
           <div className="mb-4">
@@ -71,7 +68,7 @@ export const Modal: FC<ModalProps> = ({
           </div>
         )}
         {children}
-      </Card>
+      </div>
     </div>
   );
 };
