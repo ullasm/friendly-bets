@@ -7,8 +7,8 @@ import toast from 'react-hot-toast';
 import { Settings } from 'lucide-react';
 import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import AppNavbar from '@/components/AppNavbar';
 import ProtectedRoute from '@/components/ProtectedRoute';
-import ThemeSwitcher from '@/components/ThemeSwitcher';
 import { useAuth } from '@/lib/AuthContext';
 import { logoutUser } from '@/lib/auth';
 import { getGroupById, getUserGroupMember } from '@/lib/groups';
@@ -648,14 +648,7 @@ function GroupDashboardContent() {
     return unsub;
   }, [myMember, user, groupId]);
 
-  async function handleLogout() {
-    try {
-      await logoutUser();
-      router.replace('/login');
-    } catch {
-      toast.error('Failed to sign out');
-    }
-  }
+
 
   function handleMyBetUpdated(updatedBet: Bet) {
     setMyBets((prev) => ({ ...prev, [updatedBet.matchId]: updatedBet }));
@@ -720,41 +713,26 @@ function GroupDashboardContent() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
-      <PageHeader
+      <AppNavbar
         backHref="/groups"
         subtitle={group?.name}
         maxWidth="5xl"
-        actions={
-          <>
-            {isAdmin && (
-              <>
-                <Button variant="secondary" size="sm" href={`/groups/${groupId}/admin`}>
-                  Admin Panel
-                </Button>
-                {/* Settings icon link: icon-only nav link, no Button variant — left as raw Link with lucide icon */}
-                <Link
-                  href={`/groups/${groupId}/manage`}
-                  title="Group Settings"
-                  className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
-                >
-                  <Settings className="h-5 w-5" />
-                </Link>
-              </>
-            )}
-            <ThemeSwitcher />
-            {userProfile && (
+        extraActions={
+          isAdmin ? (
+            <>
+              <Button variant="secondary" size="sm" href={`/groups/${groupId}/admin`}>
+                Admin Panel
+              </Button>
+              {/* Settings icon link: icon-only nav link — left as raw Link with lucide icon */}
               <Link
-                href="/profile"
-                title="My Profile"
-                className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                href={`/groups/${groupId}/manage`}
+                title="Group Settings"
+                className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
               >
-                <Avatar name={userProfile.displayName} color={userProfile.avatarColor} size="md" />
+                <Settings className="h-5 w-5" />
               </Link>
-            )}
-            <Button variant="ghost-warning" size="md" onClick={handleLogout}>
-              Sign out
-            </Button>
-          </>
+            </>
+          ) : undefined
         }
       />
 

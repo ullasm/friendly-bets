@@ -3,8 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
+import AppNavbar from '@/components/AppNavbar';
 import ProtectedRoute from '@/components/ProtectedRoute';
-import ThemeSwitcher from '@/components/ThemeSwitcher';
 import { useAuth } from '@/lib/AuthContext';
 import { getMatchById, getUserBetForMatch, upsertUserBetForMatch } from '@/lib/matches';
 import type { Match, Bet } from '@/lib/matches';
@@ -179,19 +179,20 @@ function BetContent() {
   const bettingLocked = match.status !== 'upcoming' && match.status !== 'live';
   const bettingClosed = !match.bettingOpen;
 
-  // ── shared header actions ─────────────────────────────────────────────────
-  const headerActions = <ThemeSwitcher />;
+  // ── shared header ─────────────────────────────────────────────────────────
+  const sharedHeader = (
+    <AppNavbar
+      backHref={`/groups/${groupId}`}
+      subtitle="Place Bet"
+      maxWidth="lg"
+    />
+  );
 
   // ── locked / closed view ─────────────────────────────────────────────────
   if (bettingLocked || bettingClosed) {
     return (
       <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
-        <PageHeader
-          backHref={`/groups/${groupId}`}
-          subtitle="Place Bet"
-          maxWidth="lg"
-          actions={headerActions}
-        />
+      {sharedHeader}
         <main className="max-w-lg mx-auto px-6 py-8 space-y-4">
           {/* Match info */}
           <Card variant="default" className="space-y-3">
@@ -247,12 +248,7 @@ function BetContent() {
   // ── main betting UI ──────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
-      <PageHeader
-        backHref={`/groups/${groupId}`}
-        subtitle="Place Bet"
-        maxWidth="lg"
-        actions={headerActions}
-      />
+      {sharedHeader}
 
       <main className="max-w-lg mx-auto px-6 py-8 space-y-6">
 

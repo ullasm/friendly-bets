@@ -1,16 +1,14 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { Plus, ChevronRight } from 'lucide-react';
+import AppNavbar from '@/components/AppNavbar';
 import ProtectedRoute from '@/components/ProtectedRoute';
-import ThemeSwitcher from '@/components/ThemeSwitcher';
 import { useAuth } from '@/lib/AuthContext';
-import { logoutUser } from '@/lib/auth';
 import { getUserGroups } from '@/lib/groups';
 import type { Group } from '@/lib/groups';
-import { Spinner, Button, Card, EmptyState, PageHeader, Avatar } from '@/components/ui';
+import { Spinner, Button, Card, EmptyState } from '@/components/ui';
 
 function formatDate(ts: Group['createdAt']) {
   return ts.toDate().toLocaleDateString('en-US', {
@@ -21,8 +19,7 @@ function formatDate(ts: Group['createdAt']) {
 }
 
 function GroupsContent() {
-  const router = useRouter();
-  const { user, userProfile } = useAuth();
+  const { user } = useAuth();
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -34,35 +31,9 @@ function GroupsContent() {
       .finally(() => setLoading(false));
   }, [user]);
 
-  async function handleLogout() {
-    try {
-      await logoutUser();
-      router.replace('/login');
-    } catch {
-      toast.error('Failed to sign out');
-    }
-  }
-
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
-      <PageHeader
-        maxWidth="5xl"
-        logoClassName="text-xl font-bold hover:text-green-400 transition-colors"
-        actions={
-          <>
-            <ThemeSwitcher />
-            {userProfile && (
-              <div className="flex items-center gap-2">
-                <Avatar name={userProfile.displayName} color={userProfile.avatarColor} size="md" />
-                <span className="text-sm text-[var(--text-secondary)]">{userProfile.displayName}</span>
-              </div>
-            )}
-            <Button variant="ghost-warning" size="md" onClick={handleLogout}>
-              Sign out
-            </Button>
-          </>
-        }
-      />
+      <AppNavbar maxWidth="5xl" />
 
       <main className="max-w-5xl mx-auto px-6 py-8">
         {/* Header row */}

@@ -5,8 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { Pencil, RefreshCw } from 'lucide-react';
+import AppNavbar from '@/components/AppNavbar';
 import ProtectedRoute from '@/components/ProtectedRoute';
-import ThemeSwitcher from '@/components/ThemeSwitcher';
 import { useAuth } from '@/lib/AuthContext';
 import { logoutUser } from '@/lib/auth';
 import {
@@ -82,14 +82,7 @@ function ManageContent() {
     return () => { cancelled = true; };
   }, [user, groupId, retryKey]);
 
-  async function handleLogout() {
-    try {
-      await logoutUser();
-      router.replace('/login');
-    } catch {
-      toast.error('Failed to sign out');
-    }
-  }
+
 
   async function handleSaveName() {
     const name = nameInput.trim();
@@ -354,21 +347,10 @@ function ManageContent() {
       </Modal>
 
       {/* Navbar */}
-      <PageHeader
+      <AppNavbar
         backHref={`/groups/${groupId}`}
         subtitle={group ? `${group.name} · Settings` : undefined}
         maxWidth="3xl"
-        actions={
-          <>
-            <ThemeSwitcher />
-            {userProfile && (
-              <Avatar name={userProfile.displayName} color={userProfile.avatarColor} size="md" />
-            )}
-            <Button variant="ghost-warning" size="md" onClick={handleLogout}>
-              Sign out
-            </Button>
-          </>
-        }
       />
 
       <main className="max-w-3xl mx-auto px-6 py-8 space-y-6">

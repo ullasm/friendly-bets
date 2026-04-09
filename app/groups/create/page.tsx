@@ -1,31 +1,19 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { ChevronLeft } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
+import AppNavbar from '@/components/AppNavbar';
 import ProtectedRoute from '@/components/ProtectedRoute';
-import ThemeSwitcher from '@/components/ThemeSwitcher';
 import { useAuth } from '@/lib/AuthContext';
-import { logoutUser } from '@/lib/auth';
 import { createGroup } from '@/lib/groups';
-import { Button, Card, FormInput, PageHeader, Avatar } from '@/components/ui';
+import { Button, Card, FormInput } from '@/components/ui';
 
 function CreateGroupContent() {
-  const router = useRouter();
   const { user, userProfile } = useAuth();
   const [groupName, setGroupName] = useState('');
   const [creating, setCreating] = useState(false);
-
-  async function handleLogout() {
-    try {
-      await logoutUser();
-      router.replace('/login');
-    } catch {
-      toast.error('Failed to sign out');
-    }
-  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -55,24 +43,7 @@ function CreateGroupContent() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
-      <PageHeader
-        maxWidth="5xl"
-        logoClassName="text-xl font-bold hover:text-green-400 transition-colors"
-        actions={
-          <>
-            <ThemeSwitcher />
-            {userProfile && (
-              <div className="flex items-center gap-2">
-                <Avatar name={userProfile.displayName} color={userProfile.avatarColor} size="md" />
-                <span className="text-sm text-[var(--text-secondary)]">{userProfile.displayName}</span>
-              </div>
-            )}
-            <Button variant="ghost-warning" size="md" onClick={handleLogout}>
-              Sign out
-            </Button>
-          </>
-        }
-      />
+      <AppNavbar maxWidth="lg" />
 
       <main className="max-w-lg mx-auto px-6 py-12">
         {/* Back link: inline icon+text nav, not a Button — left as raw Link with lucide icon */}

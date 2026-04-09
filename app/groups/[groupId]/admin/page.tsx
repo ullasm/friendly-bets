@@ -6,8 +6,8 @@ import toast from 'react-hot-toast';
 import { doc, updateDoc, Timestamp } from 'firebase/firestore';
 import { RefreshCw } from 'lucide-react';
 import { db } from '@/lib/firebase';
+import AppNavbar from '@/components/AppNavbar';
 import ProtectedRoute from '@/components/ProtectedRoute';
-import ThemeSwitcher from '@/components/ThemeSwitcher';
 import { useAuth } from '@/lib/AuthContext';
 import { logoutUser } from '@/lib/auth';
 import { getGroupById, getUserGroupMember, getGroupMembers } from '@/lib/groups';
@@ -182,14 +182,7 @@ function GroupAdminContent() {
     else setDrawAllowed(false);
   }, [format]);
 
-  async function handleLogout() {
-    try {
-      await logoutUser();
-      router.replace('/login');
-    } catch {
-      toast.error('Failed to sign out');
-    }
-  }
+
 
   async function refreshMatches() {
     const mats = await getMatches(groupId);
@@ -775,21 +768,10 @@ function GroupAdminContent() {
       </Modal>
 
       {/* Navbar */}
-      <PageHeader
+      <AppNavbar
         backHref={`/groups/${groupId}`}
         subtitle={group ? `${group.name} · Admin` : undefined}
         maxWidth="4xl"
-        actions={
-          <>
-            <ThemeSwitcher />
-            {userProfile && (
-              <Avatar name={userProfile.displayName} color={userProfile.avatarColor} size="md" />
-            )}
-            <Button variant="ghost-warning" size="md" onClick={handleLogout}>
-              Sign out
-            </Button>
-          </>
-        }
       />
 
       <main className="max-w-4xl mx-auto px-6 py-8 space-y-10">

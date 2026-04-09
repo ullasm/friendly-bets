@@ -1,16 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { updateProfile } from 'firebase/auth';
 import { doc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '@/lib/firebase';
+import AppNavbar from '@/components/AppNavbar';
 import ProtectedRoute from '@/components/ProtectedRoute';
-import ThemeSwitcher from '@/components/ThemeSwitcher';
 import { useAuth } from '@/lib/AuthContext';
-import { logoutUser } from '@/lib/auth';
 import { getUserGroups } from '@/lib/groups';
 import type { Group } from '@/lib/groups';
 import {
@@ -18,7 +16,6 @@ import {
   Button,
   Card,
   FormInput,
-  PageHeader,
   Avatar,
   SectionHeader,
   Badge,
@@ -46,7 +43,6 @@ function formatDate(ts: Group['createdAt']) {
 // ── Profile content ────────────────────────────────────────────────────────
 
 function ProfileContent() {
-  const router = useRouter();
   const { user, userProfile, setUserProfile } = useAuth();
 
   const [displayName, setDisplayName] = useState('');
@@ -72,15 +68,6 @@ function ProfileContent() {
       .catch(() => toast.error('Failed to load groups'))
       .finally(() => setLoadingGroups(false));
   }, [user]);
-
-  async function handleLogout() {
-    try {
-      await logoutUser();
-      router.replace('/login');
-    } catch {
-      toast.error('Failed to sign out');
-    }
-  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -141,19 +128,7 @@ function ProfileContent() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
-      <PageHeader
-        backHref="/groups"
-        subtitle="My Profile"
-        maxWidth="3xl"
-        actions={
-          <>
-            <ThemeSwitcher />
-            <Button variant="ghost-warning" size="md" onClick={handleLogout}>
-              Sign out
-            </Button>
-          </>
-        }
-      />
+      <AppNavbar backHref="/groups" subtitle="My Profile" maxWidth="3xl" />
 
       <main className="max-w-3xl mx-auto px-6 py-8 space-y-6">
 
