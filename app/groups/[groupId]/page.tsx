@@ -13,7 +13,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { logoutUser } from '@/lib/auth';
 import { getGroupById, getUserGroupMember } from '@/lib/groups';
 import type { Group, GroupMember } from '@/lib/groups';
-import { getBetsForGroup, getBetsForMatch, getUserBetsForGroup, upsertUserBetForMatch } from '@/lib/matches';
+import { getBetsForMatch, getUserBetsForGroup, upsertUserBetForMatch } from '@/lib/matches';
 import type { Match, Bet } from '@/lib/matches';
 import { copyText, getInviteLink } from '@/lib/share';
 import { Spinner, Button, Badge, Card, SectionHeader, PageHeader, Avatar, matchStatusVariant, betStatusVariant } from '@/components/ui';
@@ -489,20 +489,34 @@ function GroupDashboardContent() {
   const [loadingPastMatchBets, setLoadingPastMatchBets] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  // Tracks whether the current user is a member; resolved once on mount.
-  const memberCheckedRef = useRef(false);
-
   // Tracks which past match IDs have already had their bets fetched.
   // Past matches are settled/frozen — once loaded we never need to re-fetch them.
-  // Using a ref (not state) so updates inside the onSnapshot callback don't
-  // trigger a re-render or restart the effect.
+  // Using a ref so updates inside the onSnapshot callback never restart the effect.
   const loadedPastMatchIds = useRef<Set<string>>(new Set());
 
-  // ── Step 1: Resolve group + membership (one-shot, gating all listeners) ──
+  // Tracks the active (non-past) match IDs from the previous snapshot tick.
+  // When this set hasn't changed, bets are already up-to-date — skip the re-fetch.
+  const prevActiveMatchIdsRef = useRef<string>('');
+
+  // ── Single effect: start everything in parallel ───────────────────────────
+  //
+  // Previous approach had 3 chained effects:
+  //   Effect 1: getGroupById + getUserGroupMember (one-shot, gates the rest)
+  //   Effect 2: onSnapshot(matches)  ← waited for Effect 1 to resolve
+  //   Effect 3: onSnapshot(members)  ← waited for Effect 1 to resolve
+  //
+  // That created a ~400ms sequential waterfall before any data could display.
+  //
+  // New approach: fire the membership check AND both onSnapshots simultaneously.
+  // If the membership check fails (non-member), unsubscribe immediately.
+  // This eliminates one full Firestore round-trip from the critical path.
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
+    let matchesUnsub: (() => void) | null = null;
+    let membersUnsub: (() => void) | null = null;
 
+    // ── 1. Membership + group metadata (parallel, non-gating) ────────────────
     Promise.all([
       getGroupById(groupId),
       getUserGroupMember(groupId, user.uid),
@@ -510,9 +524,15 @@ function GroupDashboardContent() {
       .then(([groupResult, memberResult]) => {
         if (cancelled) return;
         setGroup(groupResult);
-        setMyMember(memberResult);
-        memberCheckedRef.current = true;
-        // loading stays true until matches/members snapshots deliver first data
+        if (!memberResult) {
+          // Non-member: tear down the listeners we already started.
+          setMyMember(null);
+          setLoading(false);
+          matchesUnsub?.();
+          membersUnsub?.();
+        } else {
+          setMyMember(memberResult);
+        }
       })
       .catch(() => {
         if (cancelled) return;
@@ -521,70 +541,65 @@ function GroupDashboardContent() {
         setLoading(false);
       });
 
-    return () => { cancelled = true; };
-  }, [user, groupId]);
-
-  // ── Step 2: Real-time matches listener ────────────────────────────────────
-  useEffect(() => {
-    // Wait until membership is confirmed
-    if (myMember === undefined) return;
-    // Non-member: nothing to listen to
-    if (myMember === null) { setLoading(false); return; }
-    if (!user) return;
-
+    // ── 2. Real-time matches listener (starts immediately) ───────────────────
     const matchesQuery = query(
       collection(db, 'matches'),
       where('groupId', '==', groupId),
       orderBy('matchDate', 'desc')
     );
 
-    const unsub = onSnapshot(
+    matchesUnsub = onSnapshot(
       matchesQuery,
       async (snap) => {
+        if (cancelled) return;
         const fetchedMatches = snap.docs.map(
           (d) => ({ id: d.id, ...d.data() } as Match)
         );
         setMatches(fetchedMatches);
         setLoading(false);
 
-        // Re-fetch bets whenever matches change (new match added, status changes)
         const now = new Date();
-        const pastMatches = fetchedMatches.filter((m) => isPastMatch(m, now));
+        const activeMatches = fetchedMatches.filter((m) => !isPastMatch(m, now));
+        const pastMatches   = fetchedMatches.filter((m) =>  isPastMatch(m, now));
 
-        // Fetch user bets + all group bets in parallel
-        try {
-          const [userBets, allGroupBets] = await Promise.all([
-            getUserBetsForGroup(groupId, user.uid),
-            getBetsForGroup(groupId),
-          ]);
+        // ── Bets for active matches ─────────────────────────────────────────
+        // Only re-fetch when the set of active match IDs actually changes.
+        // This avoids blasting Firestore every time any match field updates
+        // (e.g. bettingOpen toggled), which was the main source of slowness.
+        const activeMatchKey = activeMatches.map((m) => m.id).sort().join(',');
+        if (activeMatchKey !== prevActiveMatchIdsRef.current) {
+          prevActiveMatchIdsRef.current = activeMatchKey;
+          try {
+            // Fetch my bets and all bets for active matches in parallel.
+            // Fetching per-match instead of getBetsForGroup(all) avoids loading
+            // hundreds of settled bet documents on every tick.
+            const [userBets, ...perMatchBets] = await Promise.all([
+              getUserBetsForGroup(groupId, user.uid),
+              ...activeMatches.map((m) => getBetsForMatch(m.id, groupId)),
+            ]);
 
-          const myBetsMap: Record<string, Bet> = {};
-          for (const bet of userBets) myBetsMap[bet.matchId] = bet;
-          setMyBets(myBetsMap);
+            if (cancelled) return;
 
-          const groupBetsMap: Record<string, Bet[]> = {};
-          for (const bet of allGroupBets) {
-            groupBetsMap[bet.matchId] ??= [];
-            groupBetsMap[bet.matchId].push(bet);
+            const myBetsMap: Record<string, Bet> = {};
+            for (const bet of userBets as Bet[]) myBetsMap[bet.matchId] = bet;
+            setMyBets(myBetsMap);
+
+            const groupBetsMap: Record<string, Bet[]> = {};
+            (perMatchBets as Bet[][]).forEach((bets, i) => {
+              groupBetsMap[activeMatches[i].id] = bets;
+            });
+            // Preserve cached past-match group bets already in state.
+            setGroupBets((prev) => ({ ...prev, ...groupBetsMap }));
+          } catch {
+            toast.error('Failed to load bets');
           }
-          setGroupBets(groupBetsMap);
-        } catch {
-          toast.error('Failed to load bets');
         }
 
-        // Past match bets — only fetch for matches we haven't loaded yet.
-        // Past matches are settled/frozen, so their bets never change.
-        // Skipping already-loaded matches prevents the loading flash on every
-        // snapshot tick (e.g. when betting opens on a live match).
+        // ── Bets for past matches (fetch-once, append-only cache) ───────────
         const newPastMatches = pastMatches.filter(
           (m) => !loadedPastMatchIds.current.has(m.id)
         );
-
-        if (newPastMatches.length === 0) {
-          // Nothing new to load — leave pastMatchBets and loadingPastMatchBets
-          // exactly as they are. This is the common case after the first load.
-          return;
-        }
+        if (newPastMatches.length === 0) return;
 
         setLoadingPastMatchBets(true);
         const results = await Promise.allSettled(
@@ -599,7 +614,6 @@ function GroupDashboardContent() {
           for (const r of results) {
             if (r.status === 'fulfilled') {
               updated[r.value.matchId] = r.value.bets;
-              // Mark as loaded so future snapshot ticks skip this match.
               loadedPastMatchIds.current.add(r.value.matchId);
             } else {
               hadErrors = true;
@@ -617,25 +631,19 @@ function GroupDashboardContent() {
       }
     );
 
-    return unsub;
-  }, [myMember, user, groupId]);
-
-  // ── Step 3: Real-time leaderboard (members) listener ─────────────────────
-  useEffect(() => {
-    if (myMember === undefined || myMember === null || !user) return;
-
+    // ── 3. Real-time leaderboard (members) listener (starts immediately) ─────
     const membersQuery = query(
       collection(db, 'groups', groupId, 'members'),
       orderBy('totalPoints', 'desc')
     );
 
-    const unsub = onSnapshot(
+    membersUnsub = onSnapshot(
       membersQuery,
       (snap) => {
+        if (cancelled) return;
         const updatedMembers = snap.docs.map((d) => d.data() as GroupMember);
         setMembers(updatedMembers);
-
-        // Keep myMember in sync so admin badge / points in header reflect changes
+        // Keep myMember in sync so admin badge / points reflect live changes.
         const mine = updatedMembers.find((m) => m.userId === user.uid);
         if (mine) setMyMember(mine);
       },
@@ -645,8 +653,12 @@ function GroupDashboardContent() {
       }
     );
 
-    return unsub;
-  }, [myMember, user, groupId]);
+    return () => {
+      cancelled = true;
+      matchesUnsub?.();
+      membersUnsub?.();
+    };
+  }, [user, groupId]);
 
 
 
