@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { doc, updateDoc, Timestamp } from 'firebase/firestore';
 import { RefreshCw } from 'lucide-react';
@@ -774,22 +773,17 @@ function GroupAdminContent() {
       <AppNavbar
         center={
           group?.name ? (
-            <Link href={`/groups/${groupId}`} className="font-semibold text-sm sm:text-base text-[var(--text-primary)] truncate max-w-xs hover:opacity-75 transition-opacity">
+            <span className="font-light text-[var(--text-primary)] text-sm sm:text-base truncate">
               {group.name}
-            </Link>
+            </span>
           ) : undefined
         }
         maxWidth="5xl"
-        extraActions={
-          <div className="flex items-center gap-4">
-            <Link href={`/groups/${groupId}/admin`} className="pb-1 text-sm font-semibold text-[var(--text-primary)] border-b-2 border-blue-500">
-              Matches
-            </Link>
-            <Link href={`/groups/${groupId}/manage`} className="pb-1 text-sm font-medium text-[var(--text-muted)] border-b-2 border-transparent hover:text-[var(--text-primary)] transition-colors">
-              Group
-            </Link>
-          </div>
-        }
+        tabs={[
+          { label: 'Dashboard', href: `/groups/${groupId}` },
+          { label: 'Matches',   href: `/groups/${groupId}/admin` },
+          { label: 'Group',     href: `/groups/${groupId}/manage` },
+        ]}
       />
 
       <main className="max-w-5xl mx-auto px-6 py-8 space-y-10">

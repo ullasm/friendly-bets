@@ -2,13 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { Pencil, RefreshCw } from 'lucide-react';
 import AppNavbar from '@/components/AppNavbar';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { useAuth } from '@/lib/AuthContext';
-import { logoutUser } from '@/lib/auth';
 import {
   getGroupById,
   getGroupMembers,
@@ -23,13 +21,13 @@ import {
 } from '@/lib/groups';
 import type { Group, GroupMember } from '@/lib/groups';
 import { copyText, getInviteLink } from '@/lib/share';
-import { Spinner, Button, Badge, Card, FormInput, Modal, SectionHeader, PageHeader, Avatar, CenteredCard } from '@/components/ui';
+import { Spinner, Button, Badge, Card, FormInput, Modal, SectionHeader, Avatar, CenteredCard } from '@/components/ui';
 
 function ManageContent() {
   const params = useParams<{ groupId: string }>();
   const groupId = params.groupId;
   const router = useRouter();
-  const { user, userProfile } = useAuth();
+  const { user } = useAuth();
 
   const [isAdmin, setIsAdmin] = useState<boolean | undefined>(undefined);
   const [group, setGroup] = useState<Group | null>(null);
@@ -357,22 +355,17 @@ function ManageContent() {
       <AppNavbar
         center={
           group?.name ? (
-            <Link href={`/groups/${groupId}`} className="font-semibold text-sm sm:text-base text-[var(--text-primary)] truncate max-w-xs hover:opacity-75 transition-opacity">
+            <span className="font-light text-[var(--text-primary)] text-sm sm:text-base truncate">
               {group.name}
-            </Link>
+            </span>
           ) : undefined
         }
         maxWidth="5xl"
-        extraActions={
-          <div className="flex items-center gap-4">
-            <Link href={`/groups/${groupId}/admin`} className="pb-1 text-sm font-medium text-[var(--text-muted)] border-b-2 border-transparent hover:text-[var(--text-primary)] transition-colors">
-              Matches
-            </Link>
-            <Link href={`/groups/${groupId}/manage`} className="pb-1 text-sm font-semibold text-[var(--text-primary)] border-b-2 border-blue-500">
-              Group
-            </Link>
-          </div>
-        }
+        tabs={[
+          { label: 'Dashboard', href: `/groups/${groupId}` },
+          { label: 'Matches',   href: `/groups/${groupId}/admin` },
+          { label: 'Group',     href: `/groups/${groupId}/manage` },
+        ]}
       />
 
       <main className="max-w-5xl mx-auto px-6 py-8 space-y-6">

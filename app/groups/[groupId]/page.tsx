@@ -6,7 +6,7 @@ import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import AppNavbar from '@/components/AppNavbar';
+import AppNavbar, { type NavTab } from '@/components/AppNavbar';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { useAuth } from '@/lib/AuthContext';
 import { logoutUser } from '@/lib/auth';
@@ -678,24 +678,19 @@ function GroupDashboardContent() {
       <AppNavbar
         center={
           group?.name ? (
-            <span className="font-semibold text-[var(--text-primary)] text-sm sm:text-base truncate max-w-[200px] sm:max-w-xs">
+            <span className="font-light text-[var(--text-primary)] text-sm sm:text-base truncate">
               {group.name}
             </span>
           ) : undefined
         }
         maxWidth="5xl"
-        extraActions={
-          isAdmin ? (
-            <div className="flex items-center gap-4">
-              <Link href={`/groups/${groupId}/admin`} className="pb-1 text-sm font-medium text-[var(--text-muted)] border-b-2 border-transparent hover:text-[var(--text-primary)] transition-colors">
-                Matches
-              </Link>
-              <Link href={`/groups/${groupId}/manage`} className="pb-1 text-sm font-medium text-[var(--text-muted)] border-b-2 border-transparent hover:text-[var(--text-primary)] transition-colors">
-                Group
-              </Link>
-            </div>
-          ) : undefined
-        }
+        tabs={[
+          { label: 'Dashboard', href: `/groups/${groupId}` },
+          ...(isAdmin ? [
+            { label: 'Matches', href: `/groups/${groupId}/admin` },
+            { label: 'Group',   href: `/groups/${groupId}/manage` },
+          ] as NavTab[] : []),
+        ]}
       />
 
       {/* Content */}
