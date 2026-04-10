@@ -677,7 +677,7 @@ function GroupDashboardContent() {
   const recentBetMatches = pastMatches
     .filter((m) => myBets[m.id])
     .sort((a, b) => b.matchDate.toMillis() - a.matchDate.toMillis())
-    .slice(0, 2);
+    .slice(0, 1);
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
@@ -705,7 +705,7 @@ function GroupDashboardContent() {
         {/* Recent bets */}
         {recentBetMatches.length > 0 && (
           <section>
-            <SectionHeader title="Your Recent Bets" mb="mb-3" />
+            <SectionHeader title="Your Recent Bet" mb="mb-3" />
             <div className="space-y-3">
               {recentBetMatches.map((m) => (
                 <PastMatchCard
