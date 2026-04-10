@@ -1,7 +1,7 @@
 'use client';
 
 import type { FC, ReactNode } from 'react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 type MaxWidth = 'sm' | 'md' | 'lg' | 'xl' | '4xl';
 
@@ -47,12 +47,21 @@ export const Modal: FC<ModalProps> = ({
     return () => document.removeEventListener('keydown', handler);
   }, [open, onClose]);
 
+  // Track where the mousedown started so that click-dragging from inside the
+  // modal to outside (e.g. selecting text) doesn't accidentally close it.
+  const mouseDownTarget = useRef<EventTarget | null>(null);
+
   if (!open) return null;
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 py-6"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
+      onMouseDown={(e) => { mouseDownTarget.current = e.target; }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && mouseDownTarget.current === e.currentTarget) {
+          onClose?.();
+        }
+      }}
     >
       <div
         className={`w-full ${maxWidthClasses[maxWidth]} bg-[var(--bg-card)] border border-[var(--border)] rounded-2xl shadow-xl ${padding ?? 'p-6'} ${scrollable ? 'max-h-[90vh] overflow-y-auto' : ''} ${className}`}

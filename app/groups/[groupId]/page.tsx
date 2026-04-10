@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
@@ -12,7 +12,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { logoutUser } from '@/lib/auth';
 import { getGroupById, getUserGroupMember } from '@/lib/groups';
 import type { Group, GroupMember } from '@/lib/groups';
-import { getBetsForMatch, getUserBetsForGroup, upsertUserBetForMatch } from '@/lib/matches';
+import { upsertUserBetForMatch } from '@/lib/matches';
 import type { Match, Bet } from '@/lib/matches';
 import { copyText, getInviteLink } from '@/lib/share';
 import { Spinner, Button, Badge, Card, SectionHeader, PageHeader, Avatar, matchStatusVariant, betStatusVariant } from '@/components/ui';
@@ -378,7 +378,6 @@ interface PastMatchCardProps {
   match: Match;
   bets: Bet[];
   memberNames: Record<string, string>;
-  loading: boolean;
 }
 
 function getBetChipLabel(bet: Bet) {
@@ -411,7 +410,7 @@ function getBetSortRank(status: Bet['status']) {
   return 2;
 }
 
-function PastMatchCard({ match, bets, memberNames, loading }: PastMatchCardProps) {
+function PastMatchCard({ match, bets, memberNames }: PastMatchCardProps) {
   const resultLabel = getMatchResultLabel(match);
   const sortedBets = [...bets].sort((a, b) => {
     const rankDiff = getBetSortRank(a.status) - getBetSortRank(b.status);
@@ -443,13 +442,7 @@ function PastMatchCard({ match, bets, memberNames, loading }: PastMatchCardProps
         <span>{resultLabel}</span>
       </div>
 
-      {loading ? (
-        <div className="flex flex-wrap gap-2 animate-pulse">
-          <span className="h-7 w-28 rounded-full bg-[var(--bg-input)]" />
-          <span className="h-7 w-32 rounded-full bg-[var(--bg-input)]" />
-          <span className="h-7 w-24 rounded-full bg-[var(--bg-input)]" />
-        </div>
-      ) : sortedBets.length === 0 ? (
+      {sortedBets.length === 0 ? (
         <p className="text-xs text-[var(--text-muted)]">No bets placed</p>
       ) : (
         <div className="flex flex-wrap gap-2">
@@ -483,19 +476,8 @@ function GroupDashboardContent() {
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [myBets, setMyBets] = useState<Record<string, Bet>>({});
-  const [groupBets, setGroupBets] = useState<Record<string, Bet[]>>({});
-  const [pastMatchBets, setPastMatchBets] = useState<Record<string, Bet[]>>({});
-  const [loadingPastMatchBets, setLoadingPastMatchBets] = useState(false);
+  const [allBets, setAllBets] = useState<Record<string, Bet[]>>({});
   const [loading, setLoading] = useState(true);
-
-  // Tracks which past match IDs have already had their bets fetched.
-  // Past matches are settled/frozen — once loaded we never need to re-fetch them.
-  // Using a ref so updates inside the onSnapshot callback never restart the effect.
-  const loadedPastMatchIds = useRef<Set<string>>(new Set());
-
-  // Tracks the active (non-past) match IDs from the previous snapshot tick.
-  // When this set hasn't changed, bets are already up-to-date — skip the re-fetch.
-  const prevActiveMatchIdsRef = useRef<string>('');
 
   // ── Single effect: start everything in parallel ───────────────────────────
   //
@@ -514,6 +496,7 @@ function GroupDashboardContent() {
     let cancelled = false;
     let matchesUnsub: (() => void) | null = null;
     let membersUnsub: (() => void) | null = null;
+    let betsUnsub: (() => void) | null = null;
 
     // ── 1. Membership + group metadata (parallel, non-gating) ────────────────
     Promise.all([
@@ -529,6 +512,7 @@ function GroupDashboardContent() {
           setLoading(false);
           matchesUnsub?.();
           membersUnsub?.();
+          betsUnsub?.();
         } else {
           setMyMember(memberResult);
         }
@@ -549,79 +533,13 @@ function GroupDashboardContent() {
 
     matchesUnsub = onSnapshot(
       matchesQuery,
-      async (snap) => {
+      (snap) => {
         if (cancelled) return;
         const fetchedMatches = snap.docs.map(
           (d) => ({ id: d.id, ...d.data() } as Match)
         );
         setMatches(fetchedMatches);
         setLoading(false);
-
-        const now = new Date();
-        const activeMatches = fetchedMatches.filter((m) => !isPastMatch(m, now));
-        const pastMatches   = fetchedMatches.filter((m) =>  isPastMatch(m, now));
-
-        // ── Bets for active matches ─────────────────────────────────────────
-        // Only re-fetch when the set of active match IDs actually changes.
-        // This avoids blasting Firestore every time any match field updates
-        // (e.g. bettingOpen toggled), which was the main source of slowness.
-        const activeMatchKey = activeMatches.map((m) => m.id).sort().join(',');
-        if (activeMatchKey !== prevActiveMatchIdsRef.current) {
-          prevActiveMatchIdsRef.current = activeMatchKey;
-          try {
-            // Fetch my bets and all bets for active matches in parallel.
-            // Fetching per-match instead of getBetsForGroup(all) avoids loading
-            // hundreds of settled bet documents on every tick.
-            const [userBets, ...perMatchBets] = await Promise.all([
-              getUserBetsForGroup(groupId, user.uid),
-              ...activeMatches.map((m) => getBetsForMatch(m.id, groupId)),
-            ]);
-
-            if (cancelled) return;
-
-            const myBetsMap: Record<string, Bet> = {};
-            for (const bet of userBets as Bet[]) myBetsMap[bet.matchId] = bet;
-            setMyBets(myBetsMap);
-
-            const groupBetsMap: Record<string, Bet[]> = {};
-            (perMatchBets as Bet[][]).forEach((bets, i) => {
-              groupBetsMap[activeMatches[i].id] = bets;
-            });
-            // Preserve cached past-match group bets already in state.
-            setGroupBets((prev) => ({ ...prev, ...groupBetsMap }));
-          } catch {
-            toast.error('Failed to load bets');
-          }
-        }
-
-        // ── Bets for past matches (fetch-once, append-only cache) ───────────
-        const newPastMatches = pastMatches.filter(
-          (m) => !loadedPastMatchIds.current.has(m.id)
-        );
-        if (newPastMatches.length === 0) return;
-
-        setLoadingPastMatchBets(true);
-        const results = await Promise.allSettled(
-          newPastMatches.map(async (m) => ({
-            matchId: m.id,
-            bets: await getBetsForMatch(m.id, groupId),
-          }))
-        );
-        let hadErrors = false;
-        setPastMatchBets((prev) => {
-          const updated = { ...prev };
-          for (const r of results) {
-            if (r.status === 'fulfilled') {
-              updated[r.value.matchId] = r.value.bets;
-              loadedPastMatchIds.current.add(r.value.matchId);
-            } else {
-              hadErrors = true;
-            }
-          }
-          return updated;
-        });
-        setLoadingPastMatchBets(false);
-        if (hadErrors) toast.error('Failed to load some past match bets');
       },
       (err) => {
         console.error('[GroupDashboard] matches listener error:', err);
@@ -630,7 +548,35 @@ function GroupDashboardContent() {
       }
     );
 
-    // ── 3. Real-time leaderboard (members) listener (starts immediately) ─────
+    // ── 3. Real-time bets listener — updates all members' dashboards live ────
+    // Single-field query on groupId requires no composite index.
+    const betsQuery = query(
+      collection(db, 'bets'),
+      where('groupId', '==', groupId)
+    );
+
+    betsUnsub = onSnapshot(
+      betsQuery,
+      (snap) => {
+        if (cancelled) return;
+        const allBetsMap: Record<string, Bet[]> = {};
+        const myBetsMap: Record<string, Bet> = {};
+        for (const d of snap.docs) {
+          const bet = { id: d.id, ...d.data() } as Bet;
+          if (!allBetsMap[bet.matchId]) allBetsMap[bet.matchId] = [];
+          allBetsMap[bet.matchId].push(bet);
+          if (bet.userId === user.uid) myBetsMap[bet.matchId] = bet;
+        }
+        setAllBets(allBetsMap);
+        setMyBets(myBetsMap);
+      },
+      (err) => {
+        console.error('[GroupDashboard] bets listener error:', err);
+        toast.error('Failed to load bets');
+      }
+    );
+
+    // ── 4. Real-time leaderboard (members) listener (starts immediately) ─────
     const membersQuery = query(
       collection(db, 'groups', groupId, 'members'),
       orderBy('totalPoints', 'desc')
@@ -656,20 +602,20 @@ function GroupDashboardContent() {
       cancelled = true;
       matchesUnsub?.();
       membersUnsub?.();
+      betsUnsub?.();
     };
   }, [user, groupId]);
 
 
 
+  // Optimistic local update — the real-time bets listener will also push the
+  // change within milliseconds, so this just removes any visible flicker.
   function handleMyBetUpdated(updatedBet: Bet) {
     setMyBets((prev) => ({ ...prev, [updatedBet.matchId]: updatedBet }));
-    setGroupBets((prev) => {
+    setAllBets((prev) => {
       const existing = prev[updatedBet.matchId] ?? [];
-      const others = existing.filter((bet) => bet.id !== updatedBet.id);
-      return {
-        ...prev,
-        [updatedBet.matchId]: [...others, updatedBet],
-      };
+      const others = existing.filter((bet: Bet) => bet.id !== updatedBet.id);
+      return { ...prev, [updatedBet.matchId]: [...others, updatedBet] };
     });
   }
 
@@ -764,7 +710,7 @@ function GroupDashboardContent() {
                   match={m}
                   groupId={groupId}
                   myBet={myBets[m.id]}
-                  bets={groupBets[m.id] ?? []}
+                  bets={allBets[m.id] ?? []}
                   memberNames={memberNames}
                   currentUserId={user?.uid}
                   onBetUpdated={handleMyBetUpdated}
@@ -789,7 +735,7 @@ function GroupDashboardContent() {
                   match={m}
                   groupId={groupId}
                   myBet={myBets[m.id]}
-                  bets={groupBets[m.id] ?? []}
+                  bets={allBets[m.id] ?? []}
                   memberNames={memberNames}
                   currentUserId={user?.uid}
                   onBetUpdated={handleMyBetUpdated}
@@ -812,9 +758,8 @@ function GroupDashboardContent() {
                 <PastMatchCard
                   key={m.id}
                   match={m}
-                  bets={pastMatchBets[m.id] ?? []}
+                  bets={allBets[m.id] ?? []}
                   memberNames={memberNames}
-                  loading={loadingPastMatchBets}
                 />
               ))}
             </div>
