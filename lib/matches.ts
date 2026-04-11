@@ -166,6 +166,22 @@ export async function upsertUserBetForMatch(
   return placeBet(matchId, groupId, userId, pickedOutcome, stake);
 }
 
+export async function removeUserBetForMatch(
+  matchId: string,
+  userId: string
+): Promise<void> {
+  const match = await getMatchById(matchId);
+  if (!match) throw new Error('Match not found');
+
+  const canEditBet = (match.status === 'upcoming' || match.status === 'live') && match.bettingOpen;
+  if (!canEditBet) throw new Error('Betting is closed for this match');
+
+  const existingBet = await getUserBetForMatch(matchId, userId);
+  if (!existingBet) throw new Error('No bet found to remove');
+
+  await deleteDoc(doc(db, 'bets', existingBet.id));
+}
+
 /**
  * Returns all bets placed by a user within a specific group.
  * Requires composite index: bets [ userId ASC, groupId ASC ]

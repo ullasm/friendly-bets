@@ -90,7 +90,17 @@ service cloud.firestore {
           get(/databases/$(database)/documents/matches/$(resource.data.matchId)).data.status == 'live'
         )
       );
-      allow delete: if isGroupAdmin(resource.data.groupId);
+      allow delete: if isGroupAdmin(resource.data.groupId) || (
+        isSignedIn() &&
+        request.auth.uid == resource.data.userId &&
+        isGroupMember(resource.data.groupId) &&
+        resource.data.status == 'pending' &&
+        get(/databases/$(database)/documents/matches/$(resource.data.matchId)).data.bettingOpen == true &&
+        (
+          get(/databases/$(database)/documents/matches/$(resource.data.matchId)).data.status == 'upcoming' ||
+          get(/databases/$(database)/documents/matches/$(resource.data.matchId)).data.status == 'live'
+        )
+      );
     }
   }
 }

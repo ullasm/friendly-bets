@@ -12,10 +12,10 @@ import { useAuth } from '@/lib/AuthContext';
 import { logoutUser } from '@/lib/auth';
 import { getGroupById, getUserGroupMember } from '@/lib/groups';
 import type { Group, GroupMember } from '@/lib/groups';
-import { upsertUserBetForMatch } from '@/lib/matches';
+import { upsertUserBetForMatch, removeUserBetForMatch } from '@/lib/matches';
 import type { Match, Bet } from '@/lib/matches';
 import { copyText, getInviteLink } from '@/lib/share';
-import { Spinner, Button, Badge, Card, SectionHeader, PageHeader, Avatar, matchStatusVariant, betStatusVariant } from '@/components/ui';
+import { Spinner, Button, Badge, Card, Modal, SectionHeader, PageHeader, Avatar, matchStatusVariant, betStatusVariant } from '@/components/ui';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -91,9 +91,10 @@ interface MatchCardProps {
   memberNames: Record<string, string>;
   currentUserId?: string;
   onBetUpdated: (updatedBet: Bet) => void;
+  onBetRemoved: (matchId: string) => void;
 }
 
-function MatchCard({ match, groupId, myBet, bets, memberNames, currentUserId, onBetUpdated }: MatchCardProps) {
+function MatchCard({ match, groupId, myBet, bets, memberNames, currentUserId, onBetUpdated, onBetRemoved }: MatchCardProps) {
   const canBet =
     (match.status === 'live' || match.status === 'upcoming') && match.bettingOpen;
 
@@ -118,6 +119,8 @@ function MatchCard({ match, groupId, myBet, bets, memberNames, currentUserId, on
   const [editingBet, setEditingBet] = useState(false);
   const [selectedOutcome, setSelectedOutcome] = useState<Outcome | null>((myBet?.pickedOutcome as Outcome | undefined) ?? null);
   const [updatingBet, setUpdatingBet] = useState(false);
+  const [removingBet, setRemovingBet] = useState(false);
+  const [confirmRemoveBet, setConfirmRemoveBet] = useState(false);
 
   useEffect(() => {
     setSelectedOutcome((myBet?.pickedOutcome as Outcome | undefined) ?? null);
@@ -153,6 +156,21 @@ function MatchCard({ match, groupId, myBet, bets, memberNames, currentUserId, on
     }
   }
 
+  async function handleRemoveBet() {
+    if (!currentUserId || !myBet) return;
+    setRemovingBet(true);
+    try {
+      await removeUserBetForMatch(match.id, currentUserId);
+      setConfirmRemoveBet(false);
+      onBetRemoved(match.id);
+      toast.success('Bet removed');
+    } catch (err) {
+      toast.error(getBetActionErrorMessage(err));
+    } finally {
+      setRemovingBet(false);
+    }
+  }
+
   return (
     <Card variant="default" className="flex flex-col gap-3">
       <div className="flex items-center justify-between flex-wrap gap-2">
@@ -167,33 +185,26 @@ function MatchCard({ match, groupId, myBet, bets, memberNames, currentUserId, on
         </div>
       </div>
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <span className="text-xs text-[var(--text-muted)]">{formatMatchDate(match.matchDate)}</span>
-        {myBet ? (
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-[var(--text-secondary)]">
-              Picked: <span className="font-medium text-[var(--text-primary)]">{pickedLabel}</span>
-            </span>
-            <Badge variant={betStatusVariant(myBet.status)}>
-              {myBet.status.charAt(0).toUpperCase() + myBet.status.slice(1)}
-            </Badge>
-            {myBet.pointsDelta !== null && myBet.status === 'won' && (
-              <span className="text-xs font-semibold text-green-400">+{myBet.pointsDelta} pts</span>
-            )}
-            {myBet.pointsDelta !== null && myBet.status === 'lost' && (
-              <span className="text-xs font-semibold text-red-400">{myBet.pointsDelta} pts</span>
-            )}
-            {canChangeBet && (
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={() => setEditingBet(true)}
-              >
-                Change bet
-              </Button>
-            )}
-          </div>
-        ) : canPlaceInlineBet ? (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-[var(--text-muted)]">{formatMatchDate(match.matchDate)}</span>
+          {myBet && (
+            <>
+              <span className="text-xs text-[var(--text-secondary)]">
+                · Picked: <span className="font-medium text-[var(--text-primary)]">{pickedLabel}</span>
+              </span>
+              <Badge variant={betStatusVariant(myBet.status)}>
+                {myBet.status.charAt(0).toUpperCase() + myBet.status.slice(1)}
+              </Badge>
+              {myBet.pointsDelta !== null && myBet.status === 'won' && (
+                <span className="text-xs font-semibold text-green-400">+{myBet.pointsDelta} pts</span>
+              )}
+              {myBet.pointsDelta !== null && myBet.status === 'lost' && (
+                <span className="text-xs font-semibold text-red-400">{myBet.pointsDelta} pts</span>
+              )}
+            </>
+          )}
+        </div>
+        {canPlaceInlineBet ? (
           <Button
             type="button"
             variant="primary"
@@ -205,6 +216,25 @@ function MatchCard({ match, groupId, myBet, bets, memberNames, currentUserId, on
           >
             Place Bet
           </Button>
+        ) : canChangeBet ? (
+          <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setEditingBet(true)}
+            >
+              Change Bet
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              onClick={() => setConfirmRemoveBet(true)}
+            >
+              Remove Bet
+            </Button>
+          </div>
         ) : null}
       </div>
       {editingBet && (
@@ -370,6 +400,26 @@ function MatchCard({ match, groupId, myBet, bets, memberNames, currentUserId, on
           )}
         </div>
       )}
+      <Modal
+        open={confirmRemoveBet}
+        onClose={() => setConfirmRemoveBet(false)}
+        maxWidth="sm"
+        title="Remove bet?"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-[var(--text-secondary)]">
+            Are you sure you want to remove your bet?
+          </p>
+          <div className="flex gap-3">
+            <Button variant="secondary" size="md" className="flex-1" onClick={() => setConfirmRemoveBet(false)}>
+              No
+            </Button>
+            <Button variant="danger" size="md" className="flex-1" loading={removingBet} onClick={handleRemoveBet}>
+              Yes, Remove
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </Card>
   );
 }
@@ -623,6 +673,14 @@ function GroupDashboardContent() {
     });
   }
 
+  function handleMyBetRemoved(matchId: string) {
+    setMyBets((prev) => { const next = { ...prev }; delete next[matchId]; return next; });
+    setAllBets((prev) => ({
+      ...prev,
+      [matchId]: (prev[matchId] ?? []).filter((b: Bet) => b.userId !== user?.uid),
+    }));
+  }
+
   async function copyInviteLink() {
     if (!group) return;
     const link = getInviteLink(group.inviteCode);
@@ -659,11 +717,13 @@ function GroupDashboardContent() {
     return acc;
   }, {});
 
-  const todayMatches = matches.filter(
-    (m) =>
-      m.status === 'live' ||
-      (m.status === 'upcoming' && isSameDay(m.matchDate.toDate(), today))
-  );
+  const todayMatches = matches
+    .filter(
+      (m) =>
+        m.status === 'live' ||
+        (m.status === 'upcoming' && isSameDay(m.matchDate.toDate(), today))
+    )
+    .sort((a, b) => a.matchDate.toMillis() - b.matchDate.toMillis());
   const upcomingMatches = matches
     .filter(
       (m) =>
@@ -744,6 +804,7 @@ function GroupDashboardContent() {
                   memberNames={memberNames}
                   currentUserId={user?.uid}
                   onBetUpdated={handleMyBetUpdated}
+                  onBetRemoved={handleMyBetRemoved}
                 />
               ))}
             </div>
@@ -769,6 +830,7 @@ function GroupDashboardContent() {
                   memberNames={memberNames}
                   currentUserId={user?.uid}
                   onBetUpdated={handleMyBetUpdated}
+                  onBetRemoved={handleMyBetRemoved}
                 />
               ))}
             </div>
