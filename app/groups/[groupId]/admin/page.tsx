@@ -63,11 +63,21 @@ function formatCricDate(dateStr: string): string {
   });
 }
 
-function parseTeams(matchName: string): { teamA: string; teamB: string } {
+function abbreviateTeam(name: string): string {
+  const words = name.trim().split(/\s+/);
+  if (words.length <= 1) return name;
+  return words.map((w) => w[0].toUpperCase()).join('');
+}
+
+function parseTeams(matchName: string, abbreviate = false): { teamA: string; teamB: string } {
   const parts = matchName.split(/ vs | v /i);
   if (parts.length >= 2) {
+    const teamA = parts[0].trim();
     const teamB = parts[1].split(',')[0].trim();
-    return { teamA: parts[0].trim(), teamB };
+    return {
+      teamA: abbreviate ? abbreviateTeam(teamA) : teamA,
+      teamB: abbreviate ? abbreviateTeam(teamB) : teamB,
+    };
   }
   return { teamA: matchName.trim(), teamB: 'TBD' };
 }
@@ -171,6 +181,37 @@ function GroupAdminContent() {
       : cricMatches.filter((cm) => selectedLeagues.has(extractLeague(cm.name))),
     [cricMatches, selectedLeagues]
   );
+
+  // Set of cricApiMatchIds already in the group
+  const addedCricIds = useMemo(() => {
+    const set = new Set<string>();
+    matches.forEach((m) => { if (m.cricApiMatchId) set.add(m.cricApiMatchId); });
+    return set;
+  }, [matches]);
+
+  // Fallback keys for manually-added matches: "ABBR_A|ABBR_B|YYYY-MM-DD"
+  const addedTeamDateKeys = useMemo(() => {
+    const set = new Set<string>();
+    matches.forEach((m) => {
+      if (!m.cricApiMatchId) {
+        const d = m.matchDate.toDate();
+        const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        const a = abbreviateTeam(m.teamA);
+        const b = abbreviateTeam(m.teamB);
+        set.add(`${a}|${b}|${ds}`);
+        set.add(`${b}|${a}|${ds}`);
+      }
+    });
+    return set;
+  }, [matches]);
+
+  function isCricMatchAlreadyAdded(cm: CricMatch): boolean {
+    if (addedCricIds.has(cm.id)) return true;
+    const { teamA, teamB } = parseTeams(cm.name, true);
+    const d = new Date(cm.dateTimeLocal || cm.date);
+    const ds = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return addedTeamDateKeys.has(`${teamA}|${teamB}|${ds}`);
+  }
 
   useEffect(() => {
     if (!user) return;
@@ -337,7 +378,7 @@ function GroupAdminContent() {
   }
 
   async function handleAddFromCricApi(cm: CricMatch) {
-    const { teamA, teamB } = parseTeams(cm.name);
+    const { teamA, teamB } = parseTeams(cm.name, true);
     const rawType = cm.matchType.toLowerCase();
     const format: Match['format'] =
       rawType === 'odi' ? 'ODI' : rawType === 'test' ? 'Test' : 'T20';
@@ -811,7 +852,7 @@ function GroupAdminContent() {
 
         {/* ── CricAPI Import ── */}
         <section>
-          <SectionHeader title="Import Matches from CricAPI" mb="mb-4" />
+          <SectionHeader title="Add Matches" mb="mb-4" />
           <Card variant="default" className="space-y-4">
             <Button
               variant="secondary"
@@ -820,7 +861,7 @@ function GroupAdminContent() {
               onClick={handleFetchCricMatches}
             >
               {!cricLoading && <RefreshCw className="h-4 w-4" />}
-              Fetch Live &amp; Upcoming Matches
+              Search Matches
             </Button>
 
             {cricFetched && !cricLoading && (
@@ -855,7 +896,8 @@ function GroupAdminContent() {
                     </div>
                   )}
                   {filteredCricMatches.map((cm) => {
-                    const state = addedIds[cm.id];
+                    const alreadyAdded = isCricMatchAlreadyAdded(cm) || addedIds[cm.id] === 'added';
+                    const adding = addedIds[cm.id] === 'adding';
                     const rawType = cm.matchType.toLowerCase();
                     const typeLabel = rawType === 'odi' ? 'ODI' : rawType === 'test' ? 'Test' : 'T20';
                     return (
@@ -887,15 +929,15 @@ function GroupAdminContent() {
                         {/* "Add to Group" button: has 3 states (default/adding/added) with dynamic colors — no Button variant */}
                         <button
                           onClick={() => handleAddFromCricApi(cm)}
-                          disabled={!!state}
-                          className={`shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors disabled:cursor-not-allowed ${state === 'added'
+                          disabled={alreadyAdded || adding}
+                          className={`shrink-0 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors disabled:cursor-not-allowed ${alreadyAdded
                               ? 'bg-green-500/20 text-green-400 disabled:opacity-100'
-                              : state === 'adding'
+                              : adding
                                 ? 'bg-green-500/20 text-green-400 opacity-60'
                                 : 'bg-green-500 hover:bg-green-600 text-white'
                             }`}
                         >
-                          {state === 'added' ? 'Added ✓' : state === 'adding' ? 'Adding…' : 'Add to Group'}
+                          {alreadyAdded ? 'Added ✓' : adding ? 'Adding…' : 'Add to Group'}
                         </button>
                       </div>
                     );
