@@ -72,6 +72,43 @@ function getMatchResultLabel(match: Match) {
   return 'Result not declared';
 }
 
+function computePotentialOutcomes(
+  match: Match,
+  bets: Bet[],
+  memberNames: Record<string, string>
+): { label: string; deltas: { name: string; delta: number }[] }[] {
+  if (bets.length === 0) return [];
+
+  const outcomes: { outcome: string; label: string }[] = [
+    { outcome: 'team_a', label: match.teamA },
+    { outcome: 'team_b', label: match.teamB },
+    ...(match.drawAllowed ? [{ outcome: 'draw', label: 'Draw' }] : []),
+  ];
+
+  return outcomes.map(({ outcome, label }) => {
+    const winners = bets.filter((b) => b.pickedOutcome === outcome);
+    const losers  = bets.filter((b) => b.pickedOutcome !== outcome);
+    const totalWinnerStake = winners.reduce((s, b) => s + b.stake, 0);
+    const totalLoserStake  = losers.reduce((s, b) => s + b.stake, 0);
+
+    const winnerDeltas = winners.map((bet) => ({
+      name: memberNames[bet.userId] ?? 'Unknown',
+      delta: totalWinnerStake > 0
+        ? Math.floor((bet.stake / totalWinnerStake) * totalLoserStake)
+        : 0,
+    }));
+    const loserDeltas = losers.map((bet) => ({
+      name: memberNames[bet.userId] ?? 'Unknown',
+      delta: -bet.stake,
+    }));
+
+    return {
+      label,
+      deltas: [...winnerDeltas, ...loserDeltas].sort((a, b) => b.delta - a.delta),
+    };
+  }).filter(({ deltas }) => deltas.length > 0);
+}
+
 function getMatchPointSummary(bets: Bet[], memberNames: Record<string, string>) {
   return bets
     .filter((bet) => bet.pointsDelta !== null)
@@ -412,6 +449,28 @@ function MatchCard({ match, groupId, myBet, bets, memberNames, currentUserId, on
               </div>
             </div>
           )}
+          {!hasSettledSummary && bets.length > 0 && (() => {
+            const outcomes = computePotentialOutcomes(match, bets, memberNames);
+            if (outcomes.length === 0) return null;
+            return (
+              <div className="border-t border-[var(--border)] pt-3 space-y-1">
+                <p className="text-xs font-semibold text-[var(--text-secondary)]">If...</p>
+                {outcomes.map(({ label, deltas }) => (
+                  <div key={label} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                    <span className="font-medium text-[var(--text-primary)] shrink-0">{label} wins:</span>
+                    {deltas.map(({ name, delta }) => (
+                      <span
+                        key={name}
+                        className={delta >= 0 ? 'text-green-400' : 'text-red-400'}
+                      >
+                        {name} {delta >= 0 ? `+${delta}` : delta}
+                      </span>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
           {hasSettledSummary && (
             <div className="border-t border-[var(--border)] pt-3">
               <p className="text-xs font-semibold text-[var(--text-secondary)]">Points summary</p>
