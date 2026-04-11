@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { doc, updateDoc, Timestamp } from 'firebase/firestore';
@@ -70,6 +70,11 @@ function parseTeams(matchName: string): { teamA: string; teamB: string } {
     return { teamA: parts[0].trim(), teamB };
   }
   return { teamA: matchName.trim(), teamB: 'TBD' };
+}
+
+function extractLeague(matchName: string): string {
+  const parts = matchName.split(', ');
+  return parts.length >= 3 ? parts.slice(2).join(', ') : '';
 }
 
 function getResultLabel(match: Match): string {
@@ -152,6 +157,20 @@ function GroupAdminContent() {
   const [cricLoading, setCricLoading] = useState(false);
   const [cricFetched, setCricFetched] = useState(false);
   const [addedIds, setAddedIds] = useState<Record<string, 'adding' | 'added'>>({});
+  const [selectedLeagues, setSelectedLeagues] = useState<Set<string>>(new Set());
+
+  const leagues = useMemo(() => {
+    const set = new Set<string>();
+    cricMatches.forEach((cm) => { const l = extractLeague(cm.name); if (l) set.add(l); });
+    return Array.from(set).sort();
+  }, [cricMatches]);
+
+  const filteredCricMatches = useMemo(() =>
+    selectedLeagues.size === 0
+      ? cricMatches
+      : cricMatches.filter((cm) => selectedLeagues.has(extractLeague(cm.name))),
+    [cricMatches, selectedLeagues]
+  );
 
   useEffect(() => {
     if (!user) return;
@@ -295,6 +314,7 @@ function GroupAdminContent() {
   async function handleFetchCricMatches() {
     setCricLoading(true);
     setCricFetched(true);
+    setSelectedLeagues(new Set());
     try {
       const mats = await getCricketMatches();
       // Live matches first, then upcoming sorted by date ascending
@@ -810,7 +830,31 @@ function GroupAdminContent() {
                 </p>
               ) : (
                 <div className="space-y-3">
-                  {cricMatches.map((cm) => {
+                  {leagues.length > 1 && (
+                    <div className="flex flex-wrap gap-2">
+                      {leagues.map((league) => {
+                        const active = selectedLeagues.has(league);
+                        return (
+                          <button
+                            key={league}
+                            onClick={() => setSelectedLeagues((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(league)) next.delete(league); else next.add(league);
+                              return next;
+                            })}
+                            className={`text-xs font-medium px-3 py-1 rounded-full border transition-colors ${
+                              active
+                                ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
+                                : 'bg-[var(--bg-input)] border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)]'
+                            }`}
+                          >
+                            {league}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {filteredCricMatches.map((cm) => {
                     const state = addedIds[cm.id];
                     const rawType = cm.matchType.toLowerCase();
                     const typeLabel = rawType === 'odi' ? 'ODI' : rawType === 'test' ? 'Test' : 'T20';
