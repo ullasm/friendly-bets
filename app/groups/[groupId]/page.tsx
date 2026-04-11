@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { X } from 'lucide-react';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
 import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
@@ -47,7 +48,7 @@ function formatMatchDate(ts: Match['matchDate']) {
 
 // ── sub-components ────────────────────────────────────────────────────────────
 
-const BET_STAKE = 1000;
+const STAKE_PRESETS = [100, 200, 500, 1000];
 
 type Outcome = 'team_a' | 'team_b' | 'draw';
 
@@ -118,14 +119,17 @@ function MatchCard({ match, groupId, myBet, bets, memberNames, currentUserId, on
 
   const [editingBet, setEditingBet] = useState(false);
   const [selectedOutcome, setSelectedOutcome] = useState<Outcome | null>((myBet?.pickedOutcome as Outcome | undefined) ?? null);
+  const [stakeInput, setStakeInput] = useState<string>(String(myBet?.stake ?? 1000));
+  const stake = Math.max(0, parseInt(stakeInput) || 0);
   const [updatingBet, setUpdatingBet] = useState(false);
   const [removingBet, setRemovingBet] = useState(false);
   const [confirmRemoveBet, setConfirmRemoveBet] = useState(false);
 
   useEffect(() => {
     setSelectedOutcome((myBet?.pickedOutcome as Outcome | undefined) ?? null);
+    setStakeInput(String(myBet?.stake ?? 1000));
     setEditingBet(false);
-  }, [myBet?.id, myBet?.pickedOutcome]);
+  }, [myBet?.id, myBet?.pickedOutcome, myBet?.stake]);
 
   const canChangeBet = Boolean(myBet && myBet.status === 'pending') && canBet && Boolean(currentUserId);
   const canPlaceInlineBet = !myBet && canBet && Boolean(currentUserId);
@@ -134,14 +138,14 @@ function MatchCard({ match, groupId, myBet, bets, memberNames, currentUserId, on
     if (!currentUserId || !selectedOutcome) return;
     setUpdatingBet(true);
     try {
-      const betId = await upsertUserBetForMatch(match.id, groupId, currentUserId, selectedOutcome, BET_STAKE);
+      const betId = await upsertUserBetForMatch(match.id, groupId, currentUserId, selectedOutcome, stake);
       const updatedBet: Bet = {
         id: myBet?.id ?? betId,
         matchId: match.id,
         groupId,
         userId: currentUserId,
         pickedOutcome: selectedOutcome,
-        stake: BET_STAKE,
+        stake,
         pointsDelta: null,
         status: 'pending',
         placedAt: myBet?.placedAt ?? match.matchDate,
@@ -278,12 +282,49 @@ function MatchCard({ match, groupId, myBet, bets, memberNames, currentUserId, on
               {match.teamB}
             </button>
           </div>
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-[var(--text-secondary)]">Points</p>
+            <div className="flex gap-2">
+              {STAKE_PRESETS.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setStakeInput(String(stake + p))}
+                  className="flex-1 rounded-lg px-2 py-1.5 text-xs font-semibold border transition-colors bg-[var(--bg-card)] text-[var(--text-secondary)] border-[var(--border)] hover:bg-[var(--bg-hover)]"
+                >
+                  +{p}
+                </button>
+              ))}
+            </div>
+            <div className="relative">
+              <input
+                type="number"
+                min={1}
+                value={stakeInput}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  if (raw === '' || /^\d+$/.test(raw)) setStakeInput(raw);
+                }}
+                className="w-full rounded-lg bg-[var(--bg-card)] border border-[var(--border)] px-3 py-2 pr-8 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--accent)]"
+                placeholder="Custom amount"
+              />
+              {stake > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setStakeInput('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          </div>
           <Button
             type="button"
             variant="primary"
             size="lg"
             loading={updatingBet}
-            disabled={!selectedOutcome}
+            disabled={!selectedOutcome || stake < 1}
             onClick={handleChangeBet}
             className="w-full"
           >
@@ -361,8 +402,7 @@ function MatchCard({ match, groupId, myBet, bets, memberNames, currentUserId, on
                                 : 'bg-[var(--bg-card)] text-[var(--text-secondary)]'
                             }`}
                           >
-                            {displayName}
-                            {isMe ? ' (you)' : ''}
+                            {displayName}{isMe ? ' (you)' : ''}: {bet.stake} pts
                           </span>
                         );
                       })}
