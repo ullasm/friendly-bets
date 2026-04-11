@@ -7,9 +7,8 @@
  * ─────────────────
  * 1. Fetch all bets + the group's current rolloverPot.
  * 2. Based on the result + noDrawPolicy, decide one of four outcomes:
- *      a) Payout   — clear winners exist; matched-stake payout where winners
- *                    profit at most 1:1, losers only pay what's needed to cover
- *                    winners. RolloverPot added on top of matched winners' share.
+ *      a) Payout   — clear winners exist; pay them proportionally from
+ *                    (thisMatchPot + rolloverPot), reset rolloverPot to 0.
  *      b) Rollover — no winners (draw/abandoned + noDrawPolicy = 'rollover');
  *                    add thisMatchPot to rolloverPot, mark bets 'locked'.
  *      c) Refund   — draw/abandoned + noDrawPolicy = 'refund'; return stakes.
@@ -142,7 +141,8 @@ export async function settleMatch(input: SettlementInput): Promise<SettlementSum
 
   const matchRef    = doc(db, 'matches', matchId);
   const groupRef    = doc(db, 'groups',  groupId);
-  const thisPot = bets.reduce((sum, b) => sum + b.stake, 0);
+  const thisPot     = bets.reduce((sum, b) => sum + b.stake, 0);
+  const combinedPot = thisPot + rolloverPotBefore;
 
   const batch = writeBatch(db);
 
@@ -262,79 +262,57 @@ export async function settleMatch(input: SettlementInput): Promise<SettlementSum
     };
   }
 
-  // ── 2e. Payout (Matched Stake) ───────────────────────────────────────────
+  // ── 2e. Payout ────────────────────────────────────────────────────────────
+  //   Winners: anyone who picked `result`.
+  //   Losers : everyone else.
+  //   The pot = sum of ALL stakes (including draw bettors when result is 'draw'
+  //   and they are the ONLY bettors on their side) + any carried rolloverPot.
   //
-  //   Matched Stake rules:
-  //     1. A winner's profit is capped at 1:1 (their own stake).
-  //     2. Total payout to winners ≤ total loss from losers.
-  //     3. matchedStake = min(totalWinnerStake, totalLoserStake)
+  //   Proportional distribution:
+  //     Each winner's share = floor( (theirStake / totalWinnerStake) * combinedPot )
+  //     The remainder from flooring is awarded to the winner with the largest stake
+  //     (deterministic tiebreak: first in array if equal stakes).
   //
-  //   Winners share (matchedStake + rolloverPot) proportionally by their stake.
-  //   Since matchedStake ≤ totalWinnerStake, each winner's share ≤ their stake
-  //   automatically — the 1:1 cap is structurally enforced.
-  //
-  //   Losers only pay a proportional share of matchedStake, so if the winning
-  //   side bet less, losers get back the unmatched portion of their stake.
+  //   This is fairer than equal share: a higher-risk bet earns more.
 
   const totalWinnerStake = winnerBets.reduce((sum, b) => sum + b.stake, 0);
   const totalLoserStake  = loserBets.reduce((sum, b) => sum + b.stake, 0);
 
-  // The portion of stakes that are "matched" between the two sides.
-  const matchedStake = Math.min(totalWinnerStake, totalLoserStake);
+  // The "pot to distribute" is the losers' stakes + any rollover.
+  // Winners keep their own stakes (they are not in the pot) and receive
+  // a proportional share of the losers' pot + rolloverPot.
+  const distributedPot = totalLoserStake + rolloverPotBefore;
 
-  // Winners receive matchedStake + any rolloverPot, split proportionally.
-  const winnerPot = matchedStake + rolloverPotBefore;
-
-  const rawWinnerShares = winnerBets.map((bet) => ({
+  // Proportional gross shares (may not sum to distributedPot due to flooring)
+  const rawShares = winnerBets.map((bet) => ({
     bet,
-    share: totalWinnerStake > 0
-      ? Math.floor((bet.stake / totalWinnerStake) * winnerPot)
-      : 0,
+    share: Math.floor((bet.stake / totalWinnerStake) * distributedPot),
   }));
 
-  // Largest-remainder rounding for winners
-  const totalWinnerAllocated = rawWinnerShares.reduce((s, w) => s + w.share, 0);
-  const winnerRemainder = winnerPot - totalWinnerAllocated;
-  if (winnerRemainder > 0 && rawWinnerShares.length > 0) {
-    const sortedWinnerIndices = rawWinnerShares
+  // Correct rounding shortfall: distribute 1 pt at a time to the top-N winners
+  // by stake (largest-remainder method), so no single winner gets more than +1
+  // extra relative to others at the same stake level.
+  const totalAllocated    = rawShares.reduce((s, w) => s + w.share, 0);
+  const roundingRemainder = distributedPot - totalAllocated;
+
+  if (roundingRemainder > 0 && rawShares.length > 0) {
+    // Build a sorted index (desc stake, then original position as tiebreak)
+    const sortedIndices = rawShares
       .map((_, i) => i)
       .sort((a, b) =>
-        rawWinnerShares[b].bet.stake !== rawWinnerShares[a].bet.stake
-          ? rawWinnerShares[b].bet.stake - rawWinnerShares[a].bet.stake
+        rawShares[b].bet.stake !== rawShares[a].bet.stake
+          ? rawShares[b].bet.stake - rawShares[a].bet.stake
           : a - b
       );
-    for (let r = 0; r < winnerRemainder; r++) {
-      rawWinnerShares[sortedWinnerIndices[r % sortedWinnerIndices.length]].share += 1;
-    }
-  }
-
-  // Losers only pay their proportional share of matchedStake.
-  const rawLoserDeductions = loserBets.map((bet) => ({
-    bet,
-    deduction: totalLoserStake > 0
-      ? Math.floor((bet.stake / totalLoserStake) * matchedStake)
-      : 0,
-  }));
-
-  // Largest-remainder rounding for losers
-  const totalLoserAllocated = rawLoserDeductions.reduce((s, d) => s + d.deduction, 0);
-  const loserRemainder = matchedStake - totalLoserAllocated;
-  if (loserRemainder > 0 && rawLoserDeductions.length > 0) {
-    const sortedLoserIndices = rawLoserDeductions
-      .map((_, i) => i)
-      .sort((a, b) =>
-        rawLoserDeductions[b].bet.stake !== rawLoserDeductions[a].bet.stake
-          ? rawLoserDeductions[b].bet.stake - rawLoserDeductions[a].bet.stake
-          : a - b
-      );
-    for (let r = 0; r < loserRemainder; r++) {
-      rawLoserDeductions[sortedLoserIndices[r % sortedLoserIndices.length]].deduction += 1;
+    for (let r = 0; r < roundingRemainder; r++) {
+      rawShares[sortedIndices[r % sortedIndices.length]].share += 1;
     }
   }
 
   let totalPayout = 0;
 
-  for (const { bet, share } of rawWinnerShares) {
+  for (const { bet, share } of rawShares) {
+    // pointsDelta = net gain = share of losers' pot (they keep their own stake)
     batch.update(doc(db, 'bets', bet.id), {
       status: 'won',
       pointsDelta: share,
@@ -347,16 +325,15 @@ export async function settleMatch(input: SettlementInput): Promise<SettlementSum
     totalPayout += share;
   }
 
-  for (const { bet, deduction } of rawLoserDeductions) {
+  for (const bet of loserBets) {
+    // pointsDelta = negative of their stake; subtract from their totalPoints
     batch.update(doc(db, 'bets', bet.id), {
       status: 'lost',
-      pointsDelta: -deduction,
+      pointsDelta: -bet.stake,
     });
-    if (deduction !== 0) {
-      batch.update(memberRef(groupId, bet.userId), {
-        totalPoints: increment(-deduction),
-      });
-    }
+    batch.update(memberRef(groupId, bet.userId), {
+      totalPoints: increment(-bet.stake),
+    });
   }
 
   // Reset rolloverPot to 0 now that it has been paid out
