@@ -87,6 +87,20 @@ function extractLeague(matchName: string): string {
   return parts.length >= 3 ? parts.slice(2).join(', ') : '';
 }
 
+// Parses "Match starts at Apr 12, 10:00 GMT" → Date object in UTC.
+// Falls back to dateTimeLocal / date if status doesn't contain a parseable time.
+function parseDateFromStatus(status: string, fallback: string): Date {
+  const m = status.match(/Match starts at (\w+)\s+(\d{1,2}),?\s*(\d{1,2}:\d{2})\s*(GMT|UTC)?/i);
+  if (m) {
+    const [, month, day, time] = m;
+    const fallbackDate = new Date(fallback);
+    const year = isNaN(fallbackDate.getTime()) ? new Date().getFullYear() : fallbackDate.getFullYear();
+    const parsed = new Date(`${month} ${day} ${year} ${time}:00 GMT`);
+    if (!isNaN(parsed.getTime())) return parsed;
+  }
+  return new Date(fallback);
+}
+
 function getResultLabel(match: Match): string {
   if (match.result === 'team_a') return `${match.teamA} won`;
   if (match.result === 'team_b') return `${match.teamB} won`;
@@ -383,7 +397,7 @@ function GroupAdminContent() {
     const format: Match['format'] =
       rawType === 'odi' ? 'ODI' : rawType === 'test' ? 'Test' : 'T20';
     const drawAllowed = format === 'Test';
-    const matchDate = Timestamp.fromDate(new Date(cm.dateTimeLocal || cm.date));
+    const matchDate = Timestamp.fromDate(parseDateFromStatus(cm.status, cm.dateTimeLocal || cm.date));
     const status: Match['status'] = cm.isLive ? 'live' : 'upcoming';
 
     setAddedIds((prev) => ({ ...prev, [cm.id]: 'adding' }));

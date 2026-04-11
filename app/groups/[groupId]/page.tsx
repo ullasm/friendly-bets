@@ -478,6 +478,7 @@ function GroupDashboardContent() {
   const [myBets, setMyBets] = useState<Record<string, Bet>>({});
   const [allBets, setAllBets] = useState<Record<string, Bet[]>>({});
   const [loading, setLoading] = useState(true);
+  const [pastFilter, setPastFilter] = useState<'betted' | 'mine' | 'all'>('betted');
 
   // ── Single effect: start everything in parallel ───────────────────────────
   //
@@ -672,6 +673,11 @@ function GroupDashboardContent() {
     )
     .sort((a, b) => a.matchDate.toMillis() - b.matchDate.toMillis());
   const pastMatches = matches.filter((m) => isPastMatch(m, today));
+  const filteredPastMatches = pastMatches.filter((m) => {
+    if (pastFilter === 'betted') return (allBets[m.id] ?? []).length > 0;
+    if (pastFilter === 'mine') return !!myBets[m.id];
+    return true;
+  });
 
   // Last 2 past matches where the current user placed a bet
   const recentBetMatches = pastMatches
@@ -771,14 +777,31 @@ function GroupDashboardContent() {
 
         {/* Past */}
         <section>
-          <SectionHeader title="Past Matches" mb="mb-3" />
-          {pastMatches.length === 0 ? (
+          <SectionHeader title={`Past Matches (${filteredPastMatches.length})`} mb="mb-3" />
+          {pastMatches.length > 0 && (
+            <div className="flex gap-2 mb-3">
+              {([['betted', 'Only Betted'], ['mine', 'Betted By Me'], ['all', 'All']] as const).map(([val, label]) => (
+                <button
+                  key={val}
+                  onClick={() => setPastFilter(val)}
+                  className={`text-xs font-medium px-3 py-1 rounded-full border transition-colors ${
+                    pastFilter === val
+                      ? 'bg-[var(--accent)] border-[var(--accent)] text-white'
+                      : 'bg-[var(--bg-input)] border-[var(--border)] text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)]'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+          {filteredPastMatches.length === 0 ? (
             <Card variant="default" className="text-[var(--text-muted)] text-sm text-center">
-              No past matches
+              {pastMatches.length === 0 ? 'No past matches' : 'No matches for this filter'}
             </Card>
           ) : (
             <div className="space-y-3">
-              {pastMatches.map((m) => (
+              {filteredPastMatches.map((m) => (
                 <PastMatchCard
                   key={m.id}
                   match={m}
