@@ -33,12 +33,19 @@ function GroupsContent() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
-      <AppNavbar maxWidth="5xl" />
+      <AppNavbar
+        maxWidth="5xl"
+        center={
+          <span className="font-light text-[var(--text-primary)] text-sm sm:text-base">
+            My Groups
+          </span>
+        }
+        tabs={[]}
+      />
 
       <main className="max-w-5xl mx-auto px-6 py-8">
         {/* Header row */}
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-[var(--text-primary)]">My Groups</h2>
+        <div className="flex items-center justify-end mb-6">
           {process.env.NEXT_PUBLIC_ALLOW_CREATE_GROUP === 'true' && (
             <Button variant="primary" size="md" href="/groups/create">
               <Plus className="h-4 w-4" />
