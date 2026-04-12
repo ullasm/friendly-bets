@@ -138,7 +138,7 @@ function ProfileContent() {
         maxWidth="3xl"
       />
 
-      <main className="max-w-3xl mx-auto px-6 py-8 space-y-6">
+      <main className="max-w-3xl mx-auto px-2 py-8 space-y-6">
 
         {/* ── Avatar preview + name ── */}
         <Card variant="default" className="flex items-center gap-5">

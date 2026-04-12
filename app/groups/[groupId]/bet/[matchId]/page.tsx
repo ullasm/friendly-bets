@@ -197,7 +197,7 @@ function BetContent() {
     return (
       <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
       {sharedHeader}
-        <main className="max-w-lg mx-auto px-6 py-8 space-y-4">
+        <main className="max-w-lg mx-auto px-2 py-8 space-y-4">
           {/* Match info */}
           <Card variant="default" className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -254,7 +254,7 @@ function BetContent() {
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
       {sharedHeader}
 
-      <main className="max-w-lg mx-auto px-6 py-8 space-y-6">
+      <main className="max-w-lg mx-auto px-2 py-8 space-y-6">
 
         {/* Match info */}
         <Card variant="default" className="space-y-3">

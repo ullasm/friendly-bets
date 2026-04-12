@@ -43,7 +43,7 @@ function GroupsContent() {
         tabs={[]}
       />
 
-      <main className="max-w-5xl mx-auto px-6 py-8">
+      <main className="max-w-5xl mx-auto px-2 py-8">
         {/* Header row */}
         <div className="flex items-center justify-end mb-6">
           {process.env.NEXT_PUBLIC_ALLOW_CREATE_GROUP === 'true' && (

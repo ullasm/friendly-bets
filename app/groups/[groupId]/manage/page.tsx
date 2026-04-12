@@ -368,7 +368,7 @@ function ManageContent() {
         ]}
       />
 
-      <main className="max-w-5xl mx-auto px-6 py-8 space-y-6">
+      <main className="max-w-5xl mx-auto px-2 py-8 space-y-6">
 
         {/* ── Section 1: Group ── */}
         <Card variant="default" className="space-y-4">

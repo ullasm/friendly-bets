@@ -364,7 +364,7 @@ export default function AdminPage() {
         tabs={[]}
       />
 
-      <main className="max-w-5xl mx-auto px-4 py-8 space-y-8">
+      <main className="max-w-5xl mx-auto px-2 py-8 space-y-8">
 
         {/* Sync section */}
         <section>

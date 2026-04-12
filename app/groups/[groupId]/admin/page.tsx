@@ -862,7 +862,7 @@ function GroupAdminContent() {
         ]}
       />
 
-      <main className="max-w-5xl mx-auto px-6 py-8 space-y-10">
+      <main className="max-w-5xl mx-auto px-2 py-8 space-y-10">
 
         {/* ── CricAPI Import ── */}
         <section>

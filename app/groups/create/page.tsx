@@ -47,7 +47,7 @@ function CreateGroupContent() {
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
       <AppNavbar maxWidth="lg" />
 
-      <main className="max-w-lg mx-auto px-6 py-12">
+      <main className="max-w-lg mx-auto px-2 py-12">
         {/* Back link: inline icon+text nav, not a Button — left as raw Link with lucide icon */}
         <Link
           href="/groups"
