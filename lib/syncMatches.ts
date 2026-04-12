@@ -7,6 +7,41 @@ import {
   markSourceDataParsed,
 } from '@/lib/masterMatches';
 import { fetchMatchInfo, parseMatchInfoUpdate } from '@/lib/cricapiSeries';
+import { declareMatchResult } from '@/lib/settleMatch';
+import type { MatchResult, NoDrawPolicy } from '@/lib/settleMatch';
+
+// Find all group matches linked to a masterMatch and settle them
+async function propagateResultToGroupMatches(
+  cricApiMatchId: string,
+  result: MatchResult
+): Promise<string[]> {
+  const snap = await getDocs(
+    query(collection(db, 'matches'), where('cricApiMatchId', '==', cricApiMatchId))
+  );
+
+  const settled: string[] = [];
+
+  await Promise.all(
+    snap.docs.map(async (d) => {
+      const match = d.data();
+      // Skip already-settled matches unless we want to re-declare
+      if (match.status === 'completed' || match.status === 'abandoned') return;
+
+      const matchId = d.id;
+      const groupId = match.groupId as string;
+      const noDrawPolicy = (match.noDrawPolicy ?? 'refund') as NoDrawPolicy;
+
+      try {
+        await declareMatchResult(matchId, groupId, result, noDrawPolicy);
+        settled.push(matchId);
+      } catch (err) {
+        console.error(`[propagate] Failed to settle matchId=${matchId}:`, err);
+      }
+    })
+  );
+
+  return settled;
+}
 
 export async function runSync(): Promise<Response> {
   const now = new Date();
@@ -83,6 +118,17 @@ export async function runSync(): Promise<Response> {
         await markSourceDataParsed(sourceDataId);
 
         results.push(`updated: ${m.sourceMatchId} → ${updates.status}`);
+
+        // Propagate completed result to all group matches linked via cricApiMatchId
+        if (updates.matchEnded && updates.result && updates.result !== 'pending') {
+          const settled = await propagateResultToGroupMatches(
+            m.sourceMatchId,
+            updates.result as MatchResult
+          );
+          if (settled.length > 0) {
+            results.push(`settled group matches: ${settled.join(', ')}`);
+          }
+        }
       } catch (err) {
         results.push(`error: ${m.sourceMatchId} — ${String(err)}`);
       }
