@@ -1,4 +1,4 @@
-import { adminDb } from '@/lib/firebaseAdmin';
+import { getAdminDb } from '@/lib/firebaseAdmin';
 import {
   getActiveMatches,
   updateMasterMatchStatus,
@@ -20,7 +20,7 @@ async function adminSettleMatch(
   result: MatchResult,
   noDrawPolicy: NoDrawPolicy
 ): Promise<string> {
-  const matchRef = adminDb.doc(`matches/${matchId}`);
+  const matchRef = getAdminDb().doc(`matches/${matchId}`);
   const matchSnap = await matchRef.get();
   if (!matchSnap.exists) return 'match_not_found';
 
@@ -29,7 +29,7 @@ async function adminSettleMatch(
     return 'already_settled';
   }
 
-  const betsSnap = await adminDb
+  const betsSnap = await getAdminDb()
     .collection('bets')
     .where('matchId', '==', matchId)
     .where('groupId', '==', groupId)
@@ -42,10 +42,10 @@ async function adminSettleMatch(
     pickedOutcome: string;
   }>;
 
-  const groupSnap = await adminDb.doc(`groups/${groupId}`).get();
+  const groupSnap = await getAdminDb().doc(`groups/${groupId}`).get();
   const rolloverPot = (groupSnap.data()?.rolloverPot as number | undefined) ?? 0;
 
-  const batch = adminDb.batch();
+  const batch = getAdminDb().batch();
 
   const baseMatchUpdate = {
     bettingOpen: false,
@@ -62,7 +62,7 @@ async function adminSettleMatch(
 
   if (result === 'abandoned') {
     for (const bet of bets) {
-      batch.update(adminDb.doc(`bets/${bet.id}`), { status: 'refunded', pointsDelta: 0 });
+      batch.update(getAdminDb().doc(`bets/${bet.id}`), { status: 'refunded', pointsDelta: 0 });
     }
     batch.update(matchRef, { ...baseMatchUpdate, status: 'abandoned' });
     await batch.commit();
@@ -76,10 +76,10 @@ async function adminSettleMatch(
 
   if (isDrawLike && noWinners && noDrawPolicy === 'rollover') {
     for (const bet of bets) {
-      batch.update(adminDb.doc(`bets/${bet.id}`), { status: 'locked', pointsDelta: 0 });
+      batch.update(getAdminDb().doc(`bets/${bet.id}`), { status: 'locked', pointsDelta: 0 });
     }
     const thisPot = bets.reduce((s, b) => s + b.stake, 0);
-    batch.update(adminDb.doc(`groups/${groupId}`), { rolloverPot: FieldValue.increment(thisPot) });
+    batch.update(getAdminDb().doc(`groups/${groupId}`), { rolloverPot: FieldValue.increment(thisPot) });
     batch.update(matchRef, { ...baseMatchUpdate, status: 'completed' });
     await batch.commit();
     return 'rollover';
@@ -87,7 +87,7 @@ async function adminSettleMatch(
 
   if (isDrawLike && noWinners && noDrawPolicy === 'refund') {
     for (const bet of bets) {
-      batch.update(adminDb.doc(`bets/${bet.id}`), { status: 'refunded', pointsDelta: 0 });
+      batch.update(getAdminDb().doc(`bets/${bet.id}`), { status: 'refunded', pointsDelta: 0 });
     }
     batch.update(matchRef, { ...baseMatchUpdate, status: 'completed' });
     await batch.commit();
@@ -120,22 +120,22 @@ async function adminSettleMatch(
   }
 
   for (const { bet, share } of rawShares) {
-    batch.update(adminDb.doc(`bets/${bet.id}`), { status: 'won', pointsDelta: share });
+    batch.update(getAdminDb().doc(`bets/${bet.id}`), { status: 'won', pointsDelta: share });
     if (share !== 0) {
-      batch.update(adminDb.doc(`groups/${groupId}/members/${bet.userId}`), {
+      batch.update(getAdminDb().doc(`groups/${groupId}/members/${bet.userId}`), {
         totalPoints: FieldValue.increment(share),
       });
     }
   }
   for (const bet of loserBets) {
-    batch.update(adminDb.doc(`bets/${bet.id}`), { status: 'lost', pointsDelta: -bet.stake });
-    batch.update(adminDb.doc(`groups/${groupId}/members/${bet.userId}`), {
+    batch.update(getAdminDb().doc(`bets/${bet.id}`), { status: 'lost', pointsDelta: -bet.stake });
+    batch.update(getAdminDb().doc(`groups/${groupId}/members/${bet.userId}`), {
       totalPoints: FieldValue.increment(-bet.stake),
     });
   }
 
   if (rolloverPot > 0) {
-    batch.update(adminDb.doc(`groups/${groupId}`), { rolloverPot: 0 });
+    batch.update(getAdminDb().doc(`groups/${groupId}`), { rolloverPot: 0 });
   }
   batch.update(matchRef, { ...baseMatchUpdate, status: 'completed' });
   await batch.commit();
@@ -147,7 +147,7 @@ async function propagateResultToGroupMatches(
   cricApiMatchId: string,
   result: MatchResult
 ): Promise<string[]> {
-  const snap = await adminDb
+  const snap = await getAdminDb()
     .collection('matches')
     .where('cricApiMatchId', '==', cricApiMatchId)
     .get();
@@ -197,11 +197,11 @@ export async function runSync(): Promise<Response> {
     try {
       for (let i = 0; i < startedIds.length; i += 30) {
         const chunk = startedIds.slice(i, i + 30);
-        const snap = await adminDb
+        const snap = await getAdminDb()
           .collection('matches')
           .where('cricApiMatchId', 'in', chunk)
           .get();
-        const batch = adminDb.batch();
+        const batch = getAdminDb().batch();
         let changed = false;
         for (const d of snap.docs) {
           if (d.data().bettingOpen === true) {
