@@ -62,21 +62,25 @@ export async function runSync(): Promise<Response> {
   if (justStarted.length > 0) {
     const startedIds = justStarted.map((m) => m.sourceMatchId);
 
-    for (let i = 0; i < startedIds.length; i += 30) {
-      const chunk = startedIds.slice(i, i + 30);
-      const snap = await getDocs(
-        query(collection(db, 'matches'), where('cricApiMatchId', 'in', chunk))
-      );
-      await Promise.all(
-        snap.docs
-          .filter((d) => d.data().bettingOpen === true)
-          .map((d) =>
-            updateDoc(doc(db, 'matches', d.id), {
-              bettingOpen: false,
-              bettingClosedAt: new Date(),
-            })
-          )
-      );
+    try {
+      for (let i = 0; i < startedIds.length; i += 30) {
+        const chunk = startedIds.slice(i, i + 30);
+        const snap = await getDocs(
+          query(collection(db, 'matches'), where('cricApiMatchId', 'in', chunk))
+        );
+        await Promise.all(
+          snap.docs
+            .filter((d) => d.data().bettingOpen === true)
+            .map((d) =>
+              updateDoc(doc(db, 'matches', d.id), {
+                bettingOpen: false,
+                bettingClosedAt: new Date(),
+              })
+            )
+        );
+      }
+    } catch (err) {
+      results.push(`warn: could not close betting for just-started matches — ${String(err)}`);
     }
 
     await Promise.all(
