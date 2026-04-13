@@ -16,6 +16,7 @@ import { upsertUserBetForMatch, removeUserBetForMatch, closeBettingForMatch } fr
 import type { Match, Bet } from '@/lib/matches';
 import { copyText, getInviteLink } from '@/lib/share';
 import { Spinner, Button, Badge, Card, Modal, SectionHeader, Avatar, matchStatusVariant, betStatusVariant } from '@/components/ui';
+import { WhoBettedSection, PotentialOutcomesSection, PointsSummarySection, getMatchResultLabel, getPickedLabel } from '@/components/MatchBettingDetails';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -57,68 +58,6 @@ function getBetActionErrorMessage(err: unknown): string {
   }
   return err instanceof Error ? err.message : 'Failed to update bet';
 }
-function getPickedLabel(match: Match, pickedOutcome: Bet['pickedOutcome']) {
-  if (pickedOutcome === 'team_a') return match.teamA;
-  if (pickedOutcome === 'team_b') return match.teamB;
-  return 'Draw';
-}
-
-function getMatchResultLabel(match: Match) {
-  if (match.result === 'team_a') return `${match.teamA} won`;
-  if (match.result === 'team_b') return `${match.teamB} won`;
-  if (match.result === 'draw') return 'Match drawn';
-  if (match.result === 'abandoned') return 'Match abandoned';
-  return 'Result not declared';
-}
-
-function computePotentialOutcomes(
-  match: Match,
-  bets: Bet[],
-  memberNames: Record<string, string>
-): { label: string; deltas: { name: string; delta: number }[] }[] {
-  if (bets.length === 0) return [];
-
-  const outcomes: { outcome: string; label: string }[] = [
-    { outcome: 'team_a', label: match.teamA },
-    { outcome: 'team_b', label: match.teamB },
-    ...(match.drawAllowed ? [{ outcome: 'draw', label: 'Draw' }] : []),
-  ];
-
-  return outcomes.map(({ outcome, label }) => {
-    const winners = bets.filter((b) => b.pickedOutcome === outcome);
-    const losers  = bets.filter((b) => b.pickedOutcome !== outcome);
-    const totalWinnerStake = winners.reduce((s, b) => s + b.stake, 0);
-    const totalLoserStake  = losers.reduce((s, b) => s + b.stake, 0);
-
-    const winnerDeltas = winners.map((bet) => ({
-      name: memberNames[bet.userId] ?? 'Unknown',
-      delta: totalWinnerStake > 0
-        ? Math.floor((bet.stake / totalWinnerStake) * totalLoserStake)
-        : 0,
-    }));
-    const loserDeltas = losers.map((bet) => ({
-      name: memberNames[bet.userId] ?? 'Unknown',
-      delta: -bet.stake,
-    }));
-
-    return {
-      label,
-      deltas: [...winnerDeltas, ...loserDeltas].sort((a, b) => b.delta - a.delta),
-    };
-  }).filter(({ deltas }) => deltas.length > 0);
-}
-
-function getMatchPointSummary(bets: Bet[], memberNames: Record<string, string>) {
-  return bets
-    .filter((bet) => bet.pointsDelta !== null)
-    .map((bet) => ({
-      id: bet.id,
-      displayName: memberNames[bet.userId] ?? 'Unknown',
-      pointsDelta: bet.pointsDelta ?? 0,
-      status: bet.status,
-    }))
-    .sort((a, b) => b.pointsDelta - a.pointsDelta || a.displayName.localeCompare(b.displayName));
-}
 
 interface MatchCardProps {
   match: Match;
@@ -139,19 +78,11 @@ function MatchCard({ match, groupId, myBet, bets, memberNames, currentUserId, on
     ? getPickedLabel(match, myBet.pickedOutcome)
     : null;
 
-  const betsByOutcome = bets.reduce<Record<string, Bet[]>>((acc, bet) => {
-    const label = getPickedLabel(match, bet.pickedOutcome);
-    acc[label] ??= [];
-    acc[label].push(bet);
-    return acc;
-  }, {});
-
-  const pointSummary = getMatchPointSummary(bets, memberNames);
   const hasSettledSummary = match.status === 'completed' || match.status === 'abandoned';
   const resultLabel = hasSettledSummary ? getMatchResultLabel(match) : null;
-  const winningEntries = pointSummary.filter((entry) => entry.pointsDelta > 0);
-  const losingEntries = pointSummary.filter((entry) => entry.pointsDelta < 0);
-  const refundedEntries = pointSummary.filter((entry) => entry.pointsDelta === 0);
+  const winningEntries = bets.filter((b) => b.pointsDelta !== null && (b.pointsDelta ?? 0) > 0);
+  const losingEntries  = bets.filter((b) => b.pointsDelta !== null && (b.pointsDelta ?? 0) < 0);
+  const refundedEntries = bets.filter((b) => b.pointsDelta !== null && (b.pointsDelta ?? 0) === 0);
 
   const [editingBet, setEditingBet] = useState(false);
   const [selectedOutcome, setSelectedOutcome] = useState<Outcome | null>((myBet?.pickedOutcome as Outcome | undefined) ?? null);
@@ -420,103 +351,18 @@ function MatchCard({ match, groupId, myBet, bets, memberNames, currentUserId, on
               </div>
             </div>
           )}
-          {bets.length > 0 && (
-            <div className={hasSettledSummary ? 'border-t border-[var(--border)] pt-3' : ''}>
-              <p className="text-xs font-semibold text-[var(--text-secondary)]">Who betted</p>
-              <div className="mt-2 space-y-2">
-                {Object.entries(betsByOutcome).map(([label, outcomeBets]) => (
-                  <div key={label} className="flex flex-wrap items-start gap-2 text-xs">
-                    <span className="rounded-full bg-[var(--bg-card)] px-2 py-0.5 font-medium text-[var(--text-primary)]">
-                      {label}
-                    </span>
-                    <div className="flex flex-wrap gap-1.5">
-                      {outcomeBets.map((bet) => {
-                        const isMe = bet.userId === currentUserId;
-                        const displayName = memberNames[bet.userId] ?? 'Unknown';
-                        return (
-                          // Participant chips: color is dynamic (isMe check), not a fixed Badge variant — left as raw spans
-                          <span
-                            key={bet.id}
-                            className={`rounded-full px-2 py-0.5 ${
-                              isMe
-                                ? 'bg-green-500/15 text-green-400'
-                                : 'bg-[var(--bg-card)] text-[var(--text-secondary)]'
-                            }`}
-                          >
-                            {displayName}{isMe ? ' (you)' : ''}: {bet.stake} pts
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
+          <WhoBettedSection
+            match={match}
+            bets={bets}
+            memberNames={memberNames}
+            currentUserId={currentUserId}
+            hasBorder={hasSettledSummary}
+          />
+          {!hasSettledSummary && (
+            <PotentialOutcomesSection match={match} bets={bets} memberNames={memberNames} />
           )}
-          {!hasSettledSummary && bets.length > 0 && (() => {
-            const uniqueSides = new Set(bets.map((b) => b.pickedOutcome));
-            if (uniqueSides.size < 2) {
-              return (
-                <div className="border-t border-[var(--border)] pt-3">
-                  <p className="text-xs text-[var(--text-muted)] italic">No bets on the other side — no points will change regardless of result.</p>
-                </div>
-              );
-            }
-            const outcomes = computePotentialOutcomes(match, bets, memberNames);
-            if (outcomes.length === 0) return null;
-            return (
-              <div className="border-t border-[var(--border)] pt-3 space-y-1">
-                <p className="text-xs font-semibold text-[var(--text-secondary)]">If...</p>
-                {outcomes.map(({ label, deltas }) => (
-                  <div key={label} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
-                    <span className="font-medium text-[var(--text-primary)] shrink-0">{label} wins:</span>
-                    {deltas.map(({ name, delta }, i) => (
-                      <span
-                        key={`${name}-${i}`}
-                        className={delta >= 0 ? 'text-green-400' : 'text-red-400'}
-                      >
-                        {name} {delta >= 0 ? `+${delta}` : delta}
-                      </span>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
-          {hasSettledSummary && (
-            <div className="border-t border-[var(--border)] pt-3">
-              <p className="text-xs font-semibold text-[var(--text-secondary)]">Points summary</p>
-              {pointSummary.length === 0 ? (
-                <p className="mt-2 text-xs text-[var(--text-muted)]">No point changes recorded for this match.</p>
-              ) : (
-                <div className="mt-2 space-y-2">
-                  {[
-                    pointSummary.filter((e) => e.pointsDelta >= 0),
-                    pointSummary.filter((e) => e.pointsDelta < 0),
-                  ].map((group, gi) =>
-                    group.length === 0 ? null : (
-                      <div key={gi} className="flex flex-wrap gap-2">
-                        {group.map((entry) => (
-                          // Points chips: color is dynamic (pointsDelta sign), not a fixed Badge variant — left as raw spans
-                          <span
-                            key={entry.id}
-                            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                              entry.pointsDelta > 0
-                                ? 'bg-green-500/15 text-green-400'
-                                : entry.pointsDelta < 0
-                                ? 'bg-red-500/15 text-red-400'
-                                : 'bg-[var(--bg-card)] text-[var(--text-muted)]'
-                            }`}
-                          >
-                            {entry.displayName}: {entry.pointsDelta > 0 ? '+' : ''}{entry.pointsDelta} pts
-                          </span>
-                        ))}
-                      </div>
-                    )
-                  )}
-                </div>
-              )}
-            </div>
+          {hasSettledSummary && resultLabel && (
+            <PointsSummarySection bets={bets} memberNames={memberNames} resultLabel={resultLabel} />
           )}
         </div>
       )}
@@ -894,13 +740,10 @@ function GroupDashboardContent() {
         }
         maxWidth="5xl"
         tabs={[
-          { label: 'Bets',   href: `/groups/${groupId}` },
-          { label: 'Points',      href: `/groups/${groupId}/points` },
-          { label: 'Settlements', href: `/groups/${groupId}/settlements` },
-          ...(isAdmin ? [
-            { label: 'Matches',   href: `/groups/${groupId}/admin` },
-            { label: 'Group',     href: `/groups/${groupId}/manage` },
-          ] as NavTab[] : []),
+          { label: 'Dashboard', href: `/groups/${groupId}` },
+          { label: 'Points',    href: `/groups/${groupId}/points` },
+          ...(isAdmin ? [{ label: 'Matches', href: `/groups/${groupId}/matches` }] as NavTab[] : []),
+          { label: 'Group',     href: `/groups/${groupId}/group` },
         ]}
       />
 
@@ -910,7 +753,7 @@ function GroupDashboardContent() {
         {/* Recent bets */}
         {recentBetMatches.length > 0 && (
           <section>
-            <SectionHeader title="Your Recent Bet" mb="mb-3" />
+            <SectionHeader title="Recent" mb="mb-3" />
             <div className="space-y-3">
               {recentBetMatches.map((m) => (
                 <PastMatchCard
@@ -926,7 +769,7 @@ function GroupDashboardContent() {
 
         {/* Live & Today */}
         <section>
-          <SectionHeader title="Live &amp; Today's Matches" mb="mb-3" />
+          <SectionHeader title="Live &amp; Ongoing" mb="mb-3" />
           {todayMatches.length === 0 ? (
             <Card variant="default" className="text-[var(--text-muted)] text-sm text-center">
               No matches today
@@ -952,7 +795,7 @@ function GroupDashboardContent() {
 
         {/* Upcoming */}
         <section>
-          <SectionHeader title="Upcoming Matches" mb="mb-3" />
+          <SectionHeader title="Upcoming" mb="mb-3" />
           {upcomingMatches.length === 0 ? (
             <Card variant="default" className="text-[var(--text-muted)] text-sm text-center">
               No upcoming matches
@@ -1014,32 +857,6 @@ function GroupDashboardContent() {
           )}
         </section>
 
-        {/* Invite */}
-        <section>
-          <Card variant="default" className="space-y-4">
-            <SectionHeader title="Invite Friends" mb="mb-0" />
-            <div className="flex items-center gap-2">
-              <code className="flex-1 text-xs bg-[var(--bg-input)] border border-[var(--border)] rounded-lg px-3 py-2 text-[var(--text-secondary)] truncate">
-                {inviteLink}
-              </code>
-              <Button variant="secondary" size="md" onClick={copyInviteLink} className="shrink-0">
-                Copy Link
-              </Button>
-            </div>
-            {/* WhatsApp link: uses brand color #25D366, no matching Button variant — left as raw <a> */}
-            <a
-              href={`https://wa.me/?text=${encodeURIComponent(`Join my WhoWins group! Click here: ${inviteLink}`)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center justify-center gap-2 w-full rounded-lg bg-[#25D366] hover:bg-[#1ebe5d] text-white font-semibold text-sm px-4 py-2.5 transition-colors"
-            >
-              <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
-              </svg>
-              Share on WhatsApp
-            </a>
-          </Card>
-        </section>
       </main>
     </div>
   );

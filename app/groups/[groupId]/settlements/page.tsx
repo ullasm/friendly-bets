@@ -25,6 +25,7 @@ function SettlementsContent() {
   const [members, setMembers] = useState<GroupMember[]>([]);
   const [groupSettlements, setGroupSettlements] = useState<Settlement[]>([]);
   const [acknowledgingSettlements, setAcknowledgingSettlements] = useState<Set<string>>(new Set());
+  const [confirmInputs, setConfirmInputs] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -157,12 +158,12 @@ function SettlementsContent() {
         }
         maxWidth="5xl"
         tabs={[
-          { label: 'Bets',   href: `/groups/${groupId}` },
+          { label: 'Dashboard',   href: `/groups/${groupId}` },
           { label: 'Points',      href: `/groups/${groupId}/points` },
           { label: 'Settlements', href: `/groups/${groupId}/settlements` },
           ...(isAdmin ? [
-            { label: 'Matches',   href: `/groups/${groupId}/admin` },
-            { label: 'Group',     href: `/groups/${groupId}/manage` },
+            { label: 'Matches',   href: `/groups/${groupId}/matches` },
+            { label: 'Group',     href: `/groups/${groupId}/group` },
           ] as NavTab[] : []),
         ]}
       />
@@ -189,6 +190,9 @@ function SettlementsContent() {
                     const isAcknowledged = !outstandingKeys.has(key) && key in settledByPair;
                     const isRecipient = user?.uid === s.toUserId;
                     const isAcking = acknowledgingSettlements.has(key);
+                    const expectedPhrase = `Received ${s.points}`;
+                    const inputVal = confirmInputs[key] ?? '';
+                    const isConfirmed = inputVal === expectedPhrase;
                     return (
                       <tr key={key}>
                         <td className="py-3 pr-4 text-[var(--text-primary)]">
@@ -201,19 +205,38 @@ function SettlementsContent() {
                           {s.points} pts
                         </td>
                         <td className="py-3 text-right">
-                          {isRecipient ? (
+                          {isRecipient && !isAcknowledged ? (
+                            <div className="flex flex-col items-end gap-1.5">
+                              <span className="text-[10px] text-[var(--text-muted)]">
+                                Type &quot;{expectedPhrase}&quot; then click Received
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="text"
+                                  value={inputVal}
+                                  onChange={(e) => setConfirmInputs((prev) => ({ ...prev, [key]: e.target.value }))}
+                                  placeholder={expectedPhrase}
+                                  className="w-36 rounded-lg bg-[var(--bg-input)] border border-[var(--border)] px-2.5 py-1 text-xs text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-1 focus:ring-green-500"
+                                />
+                                <button
+                                  disabled={!isConfirmed || isAcking}
+                                  onClick={() => handleAcknowledgeSettlement(s)}
+                                  className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors disabled:cursor-not-allowed ${
+                                    isConfirmed && !isAcking
+                                      ? 'bg-green-500 hover:bg-green-600 text-white'
+                                      : 'bg-[var(--bg-input)] text-[var(--text-muted)] border border-[var(--border)] opacity-50'
+                                  }`}
+                                >
+                                  {isAcking ? 'Saving…' : 'Received'}
+                                </button>
+                              </div>
+                            </div>
+                          ) : isRecipient && isAcknowledged ? (
                             <button
-                              disabled={isAcknowledged || isAcking}
-                              onClick={() => handleAcknowledgeSettlement(s)}
-                              className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors disabled:cursor-not-allowed ${
-                                isAcknowledged
-                                  ? 'bg-green-500/20 text-green-400 disabled:opacity-100'
-                                  : isAcking
-                                    ? 'bg-[var(--bg-input)] text-[var(--text-muted)] border border-[var(--border)]'
-                                    : 'bg-green-500 hover:bg-green-600 text-white'
-                              }`}
+                              disabled
+                              className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-green-500/20 text-green-400 disabled:cursor-not-allowed disabled:opacity-100"
                             >
-                              {isAcknowledged ? 'Received ✓' : isAcking ? 'Saving…' : 'Received'}
+                              Received ✓
                             </button>
                           ) : (
                             <span className="text-[var(--text-muted)]">—</span>

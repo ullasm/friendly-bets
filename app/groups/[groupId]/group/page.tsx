@@ -251,20 +251,7 @@ function ManageContent() {
     return <Spinner size="lg" fullPage />;
   }
 
-  // ── access denied ────────────────────────────────────────────────────────
-  if (!isAdmin) {
-    return (
-      <CenteredCard maxWidth="max-w-sm">
-        <Card variant="modal" padding="p-8" className="text-center space-y-4">
-          <p className="text-red-400 font-semibold">Access denied</p>
-          <p className="text-sm text-[var(--text-secondary)]">Admin privileges required.</p>
-          <Button variant="primary" size="md" href={`/groups/${groupId}`}>
-            Back to Group
-          </Button>
-        </Card>
-      </CenteredCard>
-    );
-  }
+  // isAdmin may be false for regular members — they see a read-only view.
 
   const inviteLink = getInviteLink(inviteCode);
 
@@ -362,11 +349,10 @@ function ManageContent() {
         }
         maxWidth="5xl"
         tabs={[
-          { label: 'Bets',   href: `/groups/${groupId}` },
-          { label: 'Points',      href: `/groups/${groupId}/points` },
-          { label: 'Settlements', href: `/groups/${groupId}/settlements` },
-          { label: 'Matches',     href: `/groups/${groupId}/admin` },
-          { label: 'Group',       href: `/groups/${groupId}/manage` },
+          { label: 'Dashboard', href: `/groups/${groupId}` },
+          { label: 'Points',    href: `/groups/${groupId}/points` },
+          ...(isAdmin ? [{ label: 'Matches', href: `/groups/${groupId}/matches` }] as const : []),
+          { label: 'Group',     href: `/groups/${groupId}/group` },
         ]}
       />
 
@@ -374,7 +360,7 @@ function ManageContent() {
 
         {/* ── Section 1: Group ── */}
         <Card variant="default" className="space-y-4">
-          {editing ? (
+          {isAdmin && editing ? (
             <div className="flex gap-2">
               <FormInput
                 type="text"
@@ -398,14 +384,15 @@ function ManageContent() {
           ) : (
             <div className="flex items-center gap-2">
               <span className="text-xl font-bold text-[var(--text-primary)]">{group?.name}</span>
-              {/* Pencil icon button: icon-only, no padding needed — left as raw button with lucide icon */}
-              <button
-                onClick={() => { setEditing(true); setNameInput(group?.name ?? ''); }}
-                className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-                title="Edit group name"
-              >
-                <Pencil className="h-4 w-4" />
-              </button>
+              {isAdmin && (
+                <button
+                  onClick={() => { setEditing(true); setNameInput(group?.name ?? ''); }}
+                  className="text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                  title="Edit group name"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+              )}
             </div>
           )}
 
@@ -421,9 +408,9 @@ function ManageContent() {
           )}
         </Card>
 
-        {/* ── Section 2: Invite Link ── */}
+        {/* ── Section 2: Group Invitation Link ── */}
         <Card variant="default" className="space-y-4">
-          <SectionHeader title="Invite Link" mb="mb-0" />
+          <SectionHeader title="Group Invitation Link" mb="mb-0" />
 
           <div className="flex items-center gap-2">
             <code className="flex-1 text-xs bg-[var(--bg-input)] border border-[var(--border)] rounded-lg px-3 py-2 text-[var(--text-secondary)] truncate">
@@ -448,15 +435,17 @@ function ManageContent() {
               Share on WhatsApp
             </a>
 
-            <Button
-              variant="secondary"
-              size="md"
-              loading={regenerating}
-              onClick={handleRegenerate}
-            >
-              {!regenerating && <RefreshCw className="h-3.5 w-3.5" />}
-              Regenerate Link
-            </Button>
+            {isAdmin && (
+              <Button
+                variant="secondary"
+                size="md"
+                loading={regenerating}
+                onClick={handleRegenerate}
+              >
+                {!regenerating && <RefreshCw className="h-3.5 w-3.5" />}
+                Regenerate Link
+              </Button>
+            )}
           </div>
         </Card>
 
@@ -520,15 +509,16 @@ function ManageContent() {
                         <span className="text-sm text-[var(--text-primary)] font-medium truncate">
                           {m.displayName}
                         </span>
-                        {/* Pencil icon: icon-only button, no padding variant — left as raw button with lucide icon */}
-                        <button
-                          onClick={() => startEditingMemberName(m)}
-                          disabled={loading}
-                          className="text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-50 transition-colors"
-                          title="Edit member name"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
+                        {isAdmin && (
+                          <button
+                            onClick={() => startEditingMemberName(m)}
+                            disabled={loading}
+                            className="text-[var(--text-muted)] hover:text-[var(--text-primary)] disabled:opacity-50 transition-colors"
+                            title="Edit member name"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                        )}
                       </>
                     )}
                     {isMe && <span className="text-xs text-green-500">(you)</span>}
@@ -540,15 +530,16 @@ function ManageContent() {
                     </Badge>
                   </div>
 
-                  {/* Points */}
-                  <span className="text-sm font-semibold text-green-400 shrink-0">
-                    {m.totalPoints} pts
-                  </span>
+                  {/* Points — admin only */}
+                  {isAdmin && (
+                    <span className="text-sm font-semibold text-green-400 shrink-0">
+                      {m.totalPoints} pts
+                    </span>
+                  )}
 
-                  {/* Actions (not shown for self) */}
-                  {!isMe && (
+                  {/* Actions — admin only, not shown for self */}
+                  {isAdmin && !isMe && (
                     <div className="flex items-center gap-2 shrink-0">
-                      {/* Make Admin / Remove Admin: dynamic hover colors (yellow/slate), no Button variant — left as raw buttons */}
                       {m.role === 'member' ? (
                         <button
                           onClick={() => handlePromote(m)}
@@ -582,8 +573,8 @@ function ManageContent() {
           </ul>
         </Card>
 
-        {/* ── Section 4: Danger Zone ── */}
-        <Card variant="danger-zone" className="space-y-3">
+        {/* ── Section 4: Danger Zone — admin only ── */}
+        {isAdmin && <Card variant="danger-zone" className="space-y-3">
           <h2 className="text-lg font-semibold text-red-400">Danger Zone</h2>
           <p className="text-sm text-[var(--text-secondary)]">
             Deleting a group removes all matches, bets, and member records permanently.
@@ -595,7 +586,7 @@ function ManageContent() {
           >
             Delete Group
           </Button>
-        </Card>
+        </Card>}
 
       </main>
     </div>

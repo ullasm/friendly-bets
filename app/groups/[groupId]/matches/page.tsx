@@ -12,8 +12,9 @@ import { useAuth } from '@/lib/AuthContext';
 import { logoutUser } from '@/lib/auth';
 import { getGroupById, getUserGroupMember, getGroupMembers } from '@/lib/groups';
 import type { Group, GroupMember } from '@/lib/groups';
-import { getMatches, createMatch, declareMatchResult, updateMatch, deleteMatch, getGroupBetsForMatch, adminUpsertBetForMatch, adminClearBetForMatch } from '@/lib/matches';
+import { getMatches, createMatch, declareMatchResult, updateMatch, deleteMatch, getGroupBetsForMatch, adminUpsertBetForMatch, adminClearBetForMatch, getBetsForGroup } from '@/lib/matches';
 import type { Match, Bet } from '@/lib/matches';
+import { WhoBettedSection, PotentialOutcomesSection, PointsSummarySection, getMatchResultLabel } from '@/components/MatchBettingDetails';
 import { getActiveMatches } from '@/lib/masterMatches';
 import type { MasterMatch } from '@/lib/masterMatches';
 import { Spinner, Button, Badge, Card, FormInput, FormSelect, FormCheckbox, Modal, SectionHeader, PageHeader, Avatar, CenteredCard, matchStatusVariant } from '@/components/ui';
@@ -159,6 +160,8 @@ function GroupAdminContent() {
 
   // matches state
   const [matches, setMatches] = useState<Match[]>([]);
+  const [allGroupBets, setAllGroupBets] = useState<Record<string, Bet[]>>({});
+  const [matchFilter, setMatchFilter] = useState<'all' | 'ongoing' | 'past' | 'upcoming'>('all');
   const [selectedResult, setSelectedResult] = useState<Record<string, ResultOption>>({});
   const [declaring, setDeclaring] = useState<Record<string, boolean>>({});
   const [togglingBet, setTogglingBet] = useState<Record<string, boolean>>({});
@@ -242,12 +245,19 @@ function GroupAdminContent() {
       getGroupById(groupId),
       getMatches(groupId),
       getGroupMembers(groupId),
-    ]).then(([member, g, mats, loadedMembers]) => {
+      getBetsForGroup(groupId),
+    ]).then(([member, g, mats, loadedMembers, groupBets]) => {
       if (cancelled) return;
       setIsAdmin(member?.role === 'admin');
       setGroup(g);
       setMatches(mats);
       setMembers(loadedMembers);
+      const betsByMatch: Record<string, Bet[]> = {};
+      for (const bet of groupBets) {
+        betsByMatch[bet.matchId] ??= [];
+        betsByMatch[bet.matchId].push(bet);
+      }
+      setAllGroupBets(betsByMatch);
     }).catch((err) => {
       if (cancelled) return;
       if ((err as { code?: string })?.code === 'permission-denied') {
@@ -267,8 +277,14 @@ function GroupAdminContent() {
 
 
   async function refreshMatches() {
-    const mats = await getMatches(groupId);
+    const [mats, groupBets] = await Promise.all([getMatches(groupId), getBetsForGroup(groupId)]);
     setMatches(mats);
+    const betsByMatch: Record<string, Bet[]> = {};
+    for (const bet of groupBets) {
+      betsByMatch[bet.matchId] ??= [];
+      betsByMatch[bet.matchId].push(bet);
+    }
+    setAllGroupBets(betsByMatch);
   }
 
   async function refreshMembers() {
@@ -856,11 +872,10 @@ function GroupAdminContent() {
         }
         maxWidth="5xl"
         tabs={[
-          { label: 'Bets',   href: `/groups/${groupId}` },
-          { label: 'Points',      href: `/groups/${groupId}/points` },
-          { label: 'Settlements', href: `/groups/${groupId}/settlements` },
-          { label: 'Matches',     href: `/groups/${groupId}/admin` },
-          { label: 'Group',       href: `/groups/${groupId}/manage` },
+          { label: 'Dashboard',   href: `/groups/${groupId}` },
+          { label: 'Points',   href: `/groups/${groupId}/points` },
+          { label: 'Matches',  href: `/groups/${groupId}/matches` },
+          { label: 'Group',       href: `/groups/${groupId}/group` },
         ]}
       />
 
@@ -1044,14 +1059,55 @@ function GroupAdminContent() {
 
         {/* ── Match list ── */}
         <section>
-          <SectionHeader title="All Matches" mb="mb-4" />
-          {matches.length === 0 ? (
-            <Card variant="default" className="text-[var(--text-muted)] text-sm text-center">
-              No matches yet — create one above
-            </Card>
-          ) : (
+          <SectionHeader title="All Matches" mb="mb-3" />
+
+          {/* Filter chips */}
+          {matches.length > 0 && (
+            <div className="flex gap-2 mb-4 flex-wrap">
+              {([['all', 'All'], ['ongoing', 'Ongoing'], ['upcoming', 'Upcoming'], ['past', 'Past']] as const).map(([val, label]) => (
+                <button
+                  key={val}
+                  onClick={() => setMatchFilter(val)}
+                  className={`text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${
+                    matchFilter === val
+                      ? 'bg-green-500 border-green-500 text-white'
+                      : 'bg-transparent border-[var(--border)] text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {(() => {
+            const filtered = matches
+              .filter((m) => {
+                if (matchFilter === 'ongoing') return m.status === 'live';
+                if (matchFilter === 'upcoming') return m.status === 'upcoming';
+                if (matchFilter === 'past') return m.status === 'completed' || m.status === 'abandoned';
+                return true;
+              })
+              .sort((a, b) => {
+                if (matchFilter === 'upcoming') return a.matchDate.toMillis() - b.matchDate.toMillis();
+                return 0;
+              });
+
+            if (matches.length === 0) return (
+              <Card variant="default" className="text-[var(--text-muted)] text-sm text-center">
+                No matches yet — create one above
+              </Card>
+            );
+
+            if (filtered.length === 0) return (
+              <Card variant="default" className="text-[var(--text-muted)] text-sm text-center">
+                No {matchFilter} matches
+              </Card>
+            );
+
+            return (
             <div className="space-y-4">
-              {matches.map((match) => {
+              {filtered.map((match) => {
                 const canToggleBetting = match.status === 'upcoming' || match.status === 'live';
                 const displayedResult = selectedResult[match.id] ?? (match.result === 'pending' ? '' : match.result);
                 return (
@@ -1132,11 +1188,31 @@ function GroupAdminContent() {
                         Updating a declared match or member bet will roll back old points and settle again using the latest data.
                       </p>
                     )}
+
+                    {/* Betting details */}
+                    {(() => {
+                      const bets = allGroupBets[match.id] ?? [];
+                      const memberNames = members.reduce<Record<string, string>>((acc, m) => {
+                        acc[m.userId] = m.displayName; return acc;
+                      }, {});
+                      const isSettled = match.status === 'completed' || match.status === 'abandoned';
+                      if (bets.length === 0) return null;
+                      return (
+                        <div className="border-t border-[var(--border)] pt-3 space-y-3">
+                          <WhoBettedSection match={match} bets={bets} memberNames={memberNames} hasBorder={false} />
+                          {!isSettled && <PotentialOutcomesSection match={match} bets={bets} memberNames={memberNames} />}
+                          {isSettled && (
+                            <PointsSummarySection bets={bets} memberNames={memberNames} resultLabel={getMatchResultLabel(match)} />
+                          )}
+                        </div>
+                      );
+                    })()}
                   </Card>
                 );
               })}
             </div>
-          )}
+            );
+          })()}
         </section>
       </main>
     </div>
