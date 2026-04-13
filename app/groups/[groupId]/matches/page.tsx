@@ -1064,7 +1064,7 @@ function GroupAdminContent() {
           {/* Filter chips */}
           {matches.length > 0 && (
             <div className="flex gap-2 mb-4 flex-wrap">
-              {([['all', 'All'], ['ongoing', 'Ongoing'], ['upcoming', 'Upcoming'], ['past', 'Past']] as const).map(([val, label]) => (
+              {([['all', 'All'], ['ongoing', 'Ongoing'], ['upcoming', 'Upcoming'], ['past', 'Previous']] as const).map(([val, label]) => (
                 <button
                   key={val}
                   onClick={() => setMatchFilter(val)}

@@ -48,7 +48,7 @@ function formatMatchDate(ts: Match['matchDate']) {
 
 // ── sub-components ────────────────────────────────────────────────────────────
 
-const STAKE_PRESETS = [100, 200, 500, 1000];
+const STAKE_PRESETS = [100, 500, 1000];
 
 type Outcome = 'team_a' | 'team_b' | 'draw';
 
@@ -769,7 +769,7 @@ function GroupDashboardContent() {
 
         {/* Live & Today */}
         <section>
-          <SectionHeader title="Live &amp; Ongoing" mb="mb-3" />
+          <SectionHeader title="Ongoing" mb="mb-3" />
           {todayMatches.length === 0 ? (
             <Card variant="default" className="text-[var(--text-muted)] text-sm text-center">
               No matches today
@@ -821,7 +821,7 @@ function GroupDashboardContent() {
 
         {/* Past */}
         <section>
-          <SectionHeader title={`Past Matches (${filteredPastMatches.length})`} mb="mb-3" />
+          <SectionHeader title={`Previous (${filteredPastMatches.length})`} mb="mb-3" />
           {pastMatches.length > 0 && (
             <div className="flex gap-2 mb-3">
               {([['betted', 'Betted'], ['mine', 'Betted By Me'], ['all', 'All']] as const).map(([val, label]) => (
