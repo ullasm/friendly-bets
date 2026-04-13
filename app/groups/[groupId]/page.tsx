@@ -489,22 +489,31 @@ function MatchCard({ match, groupId, myBet, bets, memberNames, currentUserId, on
               {pointSummary.length === 0 ? (
                 <p className="mt-2 text-xs text-[var(--text-muted)]">No point changes recorded for this match.</p>
               ) : (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {pointSummary.map((entry) => (
-                    // Points chips: color is dynamic (pointsDelta sign), not a fixed Badge variant — left as raw spans
-                    <span
-                      key={entry.id}
-                      className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                        entry.pointsDelta > 0
-                          ? 'bg-green-500/15 text-green-400'
-                          : entry.pointsDelta < 0
-                          ? 'bg-red-500/15 text-red-400'
-                          : 'bg-[var(--bg-card)] text-[var(--text-muted)]'
-                      }`}
-                    >
-                      {entry.displayName}: {entry.pointsDelta > 0 ? '+' : ''}{entry.pointsDelta} pts
-                    </span>
-                  ))}
+                <div className="mt-2 space-y-2">
+                  {[
+                    pointSummary.filter((e) => e.pointsDelta >= 0),
+                    pointSummary.filter((e) => e.pointsDelta < 0),
+                  ].map((group, gi) =>
+                    group.length === 0 ? null : (
+                      <div key={gi} className="flex flex-wrap gap-2">
+                        {group.map((entry) => (
+                          // Points chips: color is dynamic (pointsDelta sign), not a fixed Badge variant — left as raw spans
+                          <span
+                            key={entry.id}
+                            className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                              entry.pointsDelta > 0
+                                ? 'bg-green-500/15 text-green-400'
+                                : entry.pointsDelta < 0
+                                ? 'bg-red-500/15 text-red-400'
+                                : 'bg-[var(--bg-card)] text-[var(--text-muted)]'
+                            }`}
+                          >
+                            {entry.displayName}: {entry.pointsDelta > 0 ? '+' : ''}{entry.pointsDelta} pts
+                          </span>
+                        ))}
+                      </div>
+                    )
+                  )}
                 </div>
               )}
             </div>
@@ -606,18 +615,27 @@ function PastMatchCard({ match, bets, memberNames }: PastMatchCardProps) {
       {sortedBets.length === 0 ? (
         <p className="text-xs text-[var(--text-muted)]">No bets placed</p>
       ) : (
-        <div className="flex flex-wrap gap-2">
-          {sortedBets.map((bet) => {
-            const displayName = memberNames[bet.userId] ?? 'Unknown';
-            return (
-              <span
-                key={bet.id}
-                className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${getBetChipClasses(bet.status)}`}
-              >
-                {displayName}: {getBetChipLabel(bet)}
-              </span>
-            );
-          })}
+        <div className="space-y-2">
+          {[
+            sortedBets.filter((b) => b.status === 'won'),
+            sortedBets.filter((b) => b.status !== 'won'),
+          ].map((group, gi) =>
+            group.length === 0 ? null : (
+              <div key={gi} className="flex flex-wrap gap-2">
+                {group.map((bet) => {
+                  const displayName = memberNames[bet.userId] ?? 'Unknown';
+                  return (
+                    <span
+                      key={bet.id}
+                      className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${getBetChipClasses(bet.status)}`}
+                    >
+                      {displayName}: {getBetChipLabel(bet)}
+                    </span>
+                  );
+                })}
+              </div>
+            )
+          )}
         </div>
       )}
     </Card>
@@ -674,6 +692,7 @@ function GroupDashboardContent() {
           matchesUnsub?.();
           membersUnsub?.();
           betsUnsub?.();
+
         } else {
           setMyMember(memberResult);
         }
@@ -875,10 +894,12 @@ function GroupDashboardContent() {
         }
         maxWidth="5xl"
         tabs={[
-          { label: 'Dashboard', href: `/groups/${groupId}` },
+          { label: 'Bets',   href: `/groups/${groupId}` },
+          { label: 'Points',      href: `/groups/${groupId}/points` },
+          { label: 'Settlements', href: `/groups/${groupId}/settlements` },
           ...(isAdmin ? [
-            { label: 'Matches', href: `/groups/${groupId}/admin` },
-            { label: 'Group',   href: `/groups/${groupId}/manage` },
+            { label: 'Matches',   href: `/groups/${groupId}/admin` },
+            { label: 'Group',     href: `/groups/${groupId}/manage` },
           ] as NavTab[] : []),
         ]}
       />
@@ -960,7 +981,7 @@ function GroupDashboardContent() {
           <SectionHeader title={`Past Matches (${filteredPastMatches.length})`} mb="mb-3" />
           {pastMatches.length > 0 && (
             <div className="flex gap-2 mb-3">
-              {([['betted', 'Only Betted'], ['mine', 'Betted By Me'], ['all', 'All']] as const).map(([val, label]) => (
+              {([['betted', 'Betted'], ['mine', 'Betted By Me'], ['all', 'All']] as const).map(([val, label]) => (
                 <button
                   key={val}
                   onClick={() => setPastFilter(val)}
@@ -991,47 +1012,6 @@ function GroupDashboardContent() {
               ))}
             </div>
           )}
-        </section>
-
-        {/* Leaderboard */}
-        <section>
-          <Card variant="default">
-            <SectionHeader title="Leaderboard" mb="mb-4" />
-            {members.length === 0 ? (
-              <p className="text-[var(--text-muted)] text-sm text-center">No members yet</p>
-            ) : (
-              <ol className="space-y-2">
-                {members.map((m, i) => {
-                  const isMe = m.userId === user?.uid;
-                  return (
-                    <li
-                      key={m.userId}
-                      className={`flex items-center justify-between py-2 px-3 rounded-lg ${
-                        isMe
-                          ? 'bg-green-500/10 border border-green-500/30'
-                          : 'bg-[var(--bg-input)]'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-[var(--text-muted)] text-sm w-5 text-right">{i + 1}</span>
-                        <Avatar name={m.displayName} color={m.avatarColor} size="sm" />
-                        <span className="text-sm text-[var(--text-primary)]">{m.displayName}</span>
-                        {isMe && (
-                          <span className="text-xs text-green-500 font-medium">(you)</span>
-                        )}
-                        {m.role === 'admin' && (
-                          <Badge variant="role-admin" shape="tag">Admin</Badge>
-                        )}
-                      </div>
-                      <span className="text-sm font-semibold text-green-400">
-                        {m.totalPoints} pts
-                      </span>
-                    </li>
-                  );
-                })}
-              </ol>
-            )}
-          </Card>
         </section>
 
         {/* Invite */}

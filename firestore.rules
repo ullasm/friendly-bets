@@ -45,7 +45,10 @@ service cloud.firestore {
         );
         allow list: if isGroupMember(groupId);
         allow create: if isSignedIn() && request.auth.uid == memberId;
-        allow update: if isGroupAdmin(groupId);
+        allow update: if isGroupAdmin(groupId) || (
+          isGroupMember(groupId) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalPoints'])
+        );
         allow delete: if isGroupAdmin(groupId);
       }
     }
@@ -82,6 +85,20 @@ service cloud.firestore {
         resource.data.matchDate <= request.time
       );
       allow delete: if isGroupAdmin(resource.data.groupId);
+    }
+
+    // Settlements — group members can read; only the recipient (toUserId) can create
+    match /settlements/{settlementId} {
+      allow read: if isSignedIn() && isGroupMember(resource.data.groupId);
+      allow create: if isSignedIn()
+        && isGroupMember(request.resource.data.groupId)
+        && request.auth.uid == request.resource.data.toUserId;
+    }
+
+    // Transactions — group members can read; created during settlement or match result
+    match /transactions/{transactionId} {
+      allow read: if isSignedIn() && isGroupMember(resource.data.groupId);
+      allow create: if isSignedIn() && isGroupMember(request.resource.data.groupId);
     }
 
     // Bets — users can read their own bets; group members can read all bets

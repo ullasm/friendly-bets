@@ -39,6 +39,7 @@ import {
 import type { WriteBatch as WriteBatchType } from 'firebase/firestore';
 import { db } from './firebase';
 import type { Bet, Match } from './matches';
+import { createMatchTransactions } from './settlements';
 
 // ── Public types ──────────────────────────────────────────────────────────────
 
@@ -344,6 +345,16 @@ export async function settleMatch(input: SettlementInput): Promise<SettlementSum
   batch.update(matchRef, { ...baseMatchUpdate, status: 'completed' });
 
   await batch.commit();
+
+  // Fire-and-forget: create Transaction ledger entries for every settled bet.
+  // Non-critical — failures do not affect the settlement itself.
+  const txEntries = [
+    ...rawShares.map(({ bet, share }) => ({ userId: bet.userId, pointsDelta: share })),
+    ...loserBets.map((bet) => ({ userId: bet.userId, pointsDelta: -bet.stake })),
+  ];
+  createMatchTransactions(matchId, groupId, txEntries).catch((err) =>
+    console.warn('[settleMatch] createMatchTransactions failed (non-critical):', err)
+  );
 
   return {
     outcome: 'payout',

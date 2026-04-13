@@ -856,9 +856,11 @@ function GroupAdminContent() {
         }
         maxWidth="5xl"
         tabs={[
-          { label: 'Dashboard', href: `/groups/${groupId}` },
-          { label: 'Matches',   href: `/groups/${groupId}/admin` },
-          { label: 'Group',     href: `/groups/${groupId}/manage` },
+          { label: 'Bets',   href: `/groups/${groupId}` },
+          { label: 'Points',      href: `/groups/${groupId}/points` },
+          { label: 'Settlements', href: `/groups/${groupId}/settlements` },
+          { label: 'Matches',     href: `/groups/${groupId}/admin` },
+          { label: 'Group',       href: `/groups/${groupId}/manage` },
         ]}
       />
 
