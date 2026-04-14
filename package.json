@@ -1,12 +1,14 @@
 {
-  "name": "cricket-bet-app",
+  "name": "friendly-bets",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build2": "powershell -Command \"next build 2>&1 | Tee-Object -FilePath 'build.log' -Append\"",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "verify": "powershell -Command \"npm run lint > build.log; npm run build2\""
   },
   "dependencies": {
     "firebase": "^12.11.0",
