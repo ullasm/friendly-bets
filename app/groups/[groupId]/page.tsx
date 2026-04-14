@@ -14,8 +14,7 @@ import { getGroupById, getUserGroupMember } from '@/lib/groups';
 import type { Group, GroupMember } from '@/lib/groups';
 import { upsertUserBetForMatch, removeUserBetForMatch, closeBettingForMatch } from '@/lib/matches';
 import type { Match, Bet } from '@/lib/matches';
-import { copyText, getInviteLink } from '@/lib/share';
-import { Spinner, Button, Badge, Card, Modal, SectionHeader, Avatar, matchStatusVariant, betStatusVariant } from '@/components/ui';
+import { Spinner, Button, Badge, Card, Modal, SectionHeader, matchStatusVariant, betStatusVariant } from '@/components/ui';
 import { WhoBettedSection, PotentialOutcomesSection, PointsSummarySection, getMatchResultLabel, getPickedLabel } from '@/components/MatchBettingDetails';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -664,17 +663,6 @@ function GroupDashboardContent() {
     }));
   }
 
-  async function copyInviteLink() {
-    if (!group) return;
-    const link = getInviteLink(group.inviteCode);
-    try {
-      await copyText(link);
-      toast.success('Link copied!');
-    } catch {
-      toast.error('Could not copy the invite link');
-    }
-  }
-
   // ── loading ────────────────────────────────────────────────────────────────
   if (loading) {
     return <Spinner size="lg" fullPage />;
@@ -694,7 +682,6 @@ function GroupDashboardContent() {
 
   const isAdmin = myMember?.role === 'admin';
   const today = new Date();
-  const inviteLink = group ? getInviteLink(group.inviteCode) : '';
   const memberNames = members.reduce<Record<string, string>>((acc, member) => {
     acc[member.userId] = member.displayName;
     return acc;

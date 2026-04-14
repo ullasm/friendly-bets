@@ -10,7 +10,7 @@ import { getMatchById, getUserBetForMatch, upsertUserBetForMatch } from '@/lib/m
 import type { Match, Bet } from '@/lib/matches';
 import { getUserGroupMember } from '@/lib/groups';
 import type { GroupMember } from '@/lib/groups';
-import { Spinner, Button, Badge, Card, PageHeader, CenteredCard, matchStatusVariant, betStatusVariant } from '@/components/ui';
+import { Spinner, Button, Badge, Card, CenteredCard, matchStatusVariant, betStatusVariant } from '@/components/ui';
 
 const STAKE = 1000;
 type Outcome = 'team_a' | 'team_b' | 'draw';

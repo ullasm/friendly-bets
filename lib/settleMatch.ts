@@ -31,12 +31,10 @@ import {
   getDocs,
   query,
   where,
-  limit,
   writeBatch,
   increment,
   Timestamp,
 } from 'firebase/firestore';
-import type { WriteBatch as WriteBatchType } from 'firebase/firestore';
 import { db } from './firebase';
 import type { Bet, Match } from './matches';
 import { createMatchTransactions } from './settlements';
@@ -143,7 +141,6 @@ export async function settleMatch(input: SettlementInput): Promise<SettlementSum
   const matchRef    = doc(db, 'matches', matchId);
   const groupRef    = doc(db, 'groups',  groupId);
   const thisPot     = bets.reduce((sum, b) => sum + b.stake, 0);
-  const combinedPot = thisPot + rolloverPotBefore;
 
   const batch = writeBatch(db);
 

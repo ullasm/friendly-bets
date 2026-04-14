@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { doc, updateDoc, Timestamp } from 'firebase/firestore';
 import { RefreshCw } from 'lucide-react';
@@ -9,7 +9,6 @@ import { db } from '@/lib/firebase';
 import AppNavbar from '@/components/AppNavbar';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { useAuth } from '@/lib/AuthContext';
-import { logoutUser } from '@/lib/auth';
 import { getGroupById, getUserGroupMember, getGroupMembers } from '@/lib/groups';
 import type { Group, GroupMember } from '@/lib/groups';
 import { getMatches, createMatch, declareMatchResult, updateMatch, deleteMatch, getGroupBetsForMatch, adminUpsertBetForMatch, adminClearBetForMatch, getBetsForGroup } from '@/lib/matches';
@@ -17,7 +16,7 @@ import type { Match, Bet } from '@/lib/matches';
 import { WhoBettedSection, PotentialOutcomesSection, PointsSummarySection, getMatchResultLabel } from '@/components/MatchBettingDetails';
 import { getActiveMatches } from '@/lib/masterMatches';
 import type { MasterMatch } from '@/lib/masterMatches';
-import { Spinner, Button, Badge, Card, FormInput, FormSelect, FormCheckbox, Modal, SectionHeader, PageHeader, Avatar, CenteredCard, matchStatusVariant } from '@/components/ui';
+import { Spinner, Button, Badge, Card, FormInput, FormSelect, FormCheckbox, Modal, SectionHeader, Avatar, CenteredCard, matchStatusVariant } from '@/components/ui';
 
 type ResultOption = 'team_a' | 'team_b' | 'draw' | 'abandoned';
 type BetPickOption = 'team_a' | 'team_b' | 'draw';
@@ -38,68 +37,10 @@ function formatMatchDate(ts: Match['matchDate']) {
   });
 }
 
-function formatCricDate(dateStr: string): string {
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return dateStr;
-
-  // CricAPI sometimes returns date-only strings (e.g. "2026-04-07") with no
-  // real time. JS parses these as UTC midnight, which in IST shows as 5:30 AM
-  // for every match. Detect this by checking if the string lacks a time part.
-  const hasTime = /T\d|^\d{4}-\d{2}-\d{2} \d/.test(dateStr);
-
-  if (!hasTime) {
-    return d.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  }
-
-  return d.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-}
-
 function abbreviateTeam(name: string): string {
   const words = name.trim().split(/\s+/);
   if (words.length <= 1) return name;
   return words.map((w) => w[0].toUpperCase()).join('');
-}
-
-function parseTeams(matchName: string, abbreviate = false): { teamA: string; teamB: string } {
-  const parts = matchName.split(/ vs | v /i);
-  if (parts.length >= 2) {
-    const teamA = parts[0].trim();
-    const teamB = parts[1].split(',')[0].trim();
-    return {
-      teamA: abbreviate ? abbreviateTeam(teamA) : teamA,
-      teamB: abbreviate ? abbreviateTeam(teamB) : teamB,
-    };
-  }
-  return { teamA: matchName.trim(), teamB: 'TBD' };
-}
-
-function extractLeague(matchName: string): string {
-  const parts = matchName.split(', ');
-  return parts.length >= 3 ? parts.slice(2).join(', ') : '';
-}
-
-// Parses "Match starts at Apr 12, 10:00 GMT" → Date object in UTC.
-// Falls back to dateTimeLocal / date if status doesn't contain a parseable time.
-function parseDateFromStatus(status: string, fallback: string): Date {
-  const m = status.match(/Match starts at (\w+)\s+(\d{1,2}),?\s*(\d{1,2}:\d{2})\s*(GMT|UTC)?/i);
-  if (m) {
-    const [, month, day, time] = m;
-    const fallbackDate = new Date(fallback);
-    const year = isNaN(fallbackDate.getTime()) ? new Date().getFullYear() : fallbackDate.getFullYear();
-    const parsed = new Date(`${month} ${day} ${year} ${time}:00 GMT`);
-    if (!isNaN(parsed.getTime())) return parsed;
-  }
-  return new Date(fallback);
 }
 
 function inferFormat(seriesName: string): Match['format'] {
@@ -136,8 +77,7 @@ function getActionErrorMessage(err: unknown, fallback: string): string {
 function GroupAdminContent() {
   const params = useParams<{ groupId: string }>();
   const groupId = params.groupId;
-  const router = useRouter();
-  const { user, userProfile } = useAuth();
+  const { user } = useAuth();
 
   // access state
   const [isAdmin, setIsAdmin] = useState<boolean | undefined>(undefined);
