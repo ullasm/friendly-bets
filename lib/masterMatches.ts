@@ -16,6 +16,7 @@ export interface MasterSeries {
   id: string;
   name: string;
   cricapiId: string;
+  endDate?: Timestamp;
 }
 
 export type MasterMatchStatus = 'upcoming' | 'live' | 'completed' | 'abandoned';

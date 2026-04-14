@@ -225,8 +225,20 @@ function SeriesRow({ series, onDeleted }: { series: MasterSeries; onDeleted: () 
         onKeyDown={(e) => e.key === 'Enter' && setExpanded((v) => !v)}
       >
         <div>
-          <p className="font-semibold text-[var(--text-primary)]">{series.name}</p>
-          <p className="text-xs text-[var(--text-muted)] mt-0.5">CricAPI ID: {series.cricapiId}</p>
+          <div className="flex items-center gap-2">
+            <p className="font-semibold text-[var(--text-primary)]">{series.name}</p>
+            {series.endDate && series.endDate.toDate() < new Date() && (
+              <span className="text-xs px-1.5 py-0.5 rounded bg-[var(--bg-input)] text-[var(--text-muted)]">ended</span>
+            )}
+          </div>
+          <p className="text-xs text-[var(--text-muted)] mt-0.5">
+            CricAPI ID: {series.cricapiId}
+            {series.endDate && (
+              <span className="ml-2">
+                · ends {series.endDate.toDate().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </span>
+            )}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -256,6 +268,7 @@ function SeriesRow({ series, onDeleted }: { series: MasterSeries; onDeleted: () 
 function AddSeriesForm({ onAdded }: { onAdded: () => void }) {
   const [name, setName] = useState('');
   const [cricapiId, setCricapiId] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [saving, setSaving] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -263,10 +276,15 @@ function AddSeriesForm({ onAdded }: { onAdded: () => void }) {
     if (!name.trim() || !cricapiId.trim()) return;
     setSaving(true);
     try {
-      await saveMasterSeries({ name: name.trim(), cricapiId: cricapiId.trim() });
+      await saveMasterSeries({
+        name: name.trim(),
+        cricapiId: cricapiId.trim(),
+        ...(endDate ? { endDate: Timestamp.fromDate(new Date(endDate)) } : {}),
+      });
       toast.success('Series added');
       setName('');
       setCricapiId('');
+      setEndDate('');
       onAdded();
     } catch {
       toast.error('Failed to save series');
@@ -275,22 +293,33 @@ function AddSeriesForm({ onAdded }: { onAdded: () => void }) {
     }
   }
 
+  const INPUT_CLS = 'flex-1 bg-[var(--bg-input)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-green-500';
+
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2">
+    <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-2 flex-wrap">
       <input
-        className="flex-1 bg-[var(--bg-input)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-green-500"
+        className={INPUT_CLS}
         placeholder="Series name (e.g. IPL 2026)"
         value={name}
         onChange={(e) => setName(e.target.value)}
         required
       />
       <input
-        className="flex-1 bg-[var(--bg-input)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:outline-none focus:ring-2 focus:ring-green-500"
+        className={INPUT_CLS}
         placeholder="CricAPI series UUID"
         value={cricapiId}
         onChange={(e) => setCricapiId(e.target.value)}
         required
       />
+      <div className="flex flex-col gap-0.5">
+        <label className="text-xs text-[var(--text-muted)] px-1">End date (optional)</label>
+        <input
+          type="date"
+          className="bg-[var(--bg-input)] border border-[var(--border)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-green-500"
+          value={endDate}
+          onChange={(e) => setEndDate(e.target.value)}
+        />
+      </div>
       <Button type="submit" size="md" loading={saving} disabled={!name.trim() || !cricapiId.trim()}>
         <Plus className="h-4 w-4" />
         Add Series
