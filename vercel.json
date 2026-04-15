@@ -1,15 +1,7 @@
 {
   "crons": [
     {
-      "path": "/api/cron/fill-all",
-      "schedule": "0 2 * * *"
-    },
-    {
-      "path": "/api/cron/auto-add-matches",
-      "schedule": "0 2 * * *"
-    },
-    {
-      "path": "/api/cron/sync",
+      "path": "/api/cron/daily",
       "schedule": "0 2 * * *"
     }
   ]

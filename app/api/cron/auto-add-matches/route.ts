@@ -7,12 +7,7 @@ function inferFormat(seriesName: string): 'T20' | 'ODI' | 'Test' {
   return 'T20';
 }
 
-export async function GET(req: Request) {
-  const auth = req.headers.get('authorization');
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
+export async function runAutoAddMatches() {
   const db = getAdminDb();
 
   const startOfToday = new Date();
@@ -28,7 +23,7 @@ export async function GET(req: Request) {
     .get();
 
   if (masterSnap.empty) {
-    return Response.json({ totalAdded: 0, reason: 'No upcoming matches in next 4 days' });
+    return { totalAdded: 0, reason: 'No upcoming matches in next 4 days' };
   }
 
   const upcoming = masterSnap.docs.map((d) => ({ id: d.id, ...d.data() } as {
@@ -95,5 +90,15 @@ export async function GET(req: Request) {
   }
 
   const totalAdded = results.reduce((s, r) => s + r.added.length, 0);
-  return Response.json({ totalAdded, results });
+  return { totalAdded, results };
+}
+
+export async function GET(req: Request) {
+  const auth = req.headers.get('authorization');
+  if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const data = await runAutoAddMatches();
+  return Response.json(data);
 }

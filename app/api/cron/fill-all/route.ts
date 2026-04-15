@@ -1,12 +1,7 @@
 import { getMasterSeries, saveSourceData, markSourceDataParsed, upsertMasterMatch } from '@/lib/masterMatches';
 import { fetchSeriesInfo, parseSeriesInfoToMatches } from '@/lib/cricapiSeries';
 
-export async function GET(req: Request) {
-  const auth = req.headers.get('authorization');
-  if (auth !== `Bearer ${process.env.CRON_SECRET}`) {
-    return Response.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
+export async function runFillAll() {
   const allSeries = await getMasterSeries();
   const now = new Date();
   const series = allSeries.filter((s) => !s.endDate || s.endDate.toDate() >= now);
@@ -30,5 +25,15 @@ export async function GET(req: Request) {
     }
   }
 
-  return Response.json({ results });
+  return { results };
+}
+
+export async function GET(req: Request) {
+  const auth = req.headers.get('authorization');
+  if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
+    return Response.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const data = await runFillAll();
+  return Response.json(data);
 }
