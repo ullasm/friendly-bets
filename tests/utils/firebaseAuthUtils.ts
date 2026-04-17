@@ -1,34 +1,39 @@
 /**
  * tests/utils/firebaseAuthUtils.ts
  *
- * Authenticates a Playwright page by navigating to /login and submitting
- * the email/password form — the same flow a real user follows.
- *
- * Note: the previous implementation used the Firebase REST API + localStorage
- * injection to avoid the form.  That was only needed when tests relied on
- * Playwright storageState to persist sessions across pages (which doesn't
- * work with Firebase Auth v9+ because it stores state in IndexedDB).
- * Since every test calls loginAsRole() fresh, the form-based approach is
- * simpler, more reliable, and avoids the page.goto() / waitUntil:'load'
- * hanging issue caused by persistent Firestore streams in fresh contexts.
+ * Authenticates a Playwright page by minting a Firebase custom token via the
+ * Admin SDK and navigating to the test-only /test-auth page, which calls
+ * signInWithCustomToken client-side. This avoids the signInWithEmailAndPassword
+ * quota that would otherwise be exhausted by 150+ tests running in parallel.
  */
 
 import type { Page } from '@playwright/test';
+import * as admin from 'firebase-admin';
+import * as fs from 'fs';
+import * as path from 'path';
 
-/**
- * Authenticate `page` by navigating to /login and submitting the form.
- * Waits until the app redirects to /groups, confirming the login succeeded.
- */
+function initAdmin() {
+  if (!admin.apps.length) {
+    const keyPath = path.resolve(process.cwd(), 'serviceAccountKey.json');
+    admin.initializeApp({
+      credential: admin.credential.cert(
+        JSON.parse(fs.readFileSync(keyPath, 'utf-8'))
+      ),
+    });
+  }
+}
+
 export async function loginWithFirebase(
-  page:     Page,
-  email:    string,
-  password: string,
+  page: Page,
+  email: string,
+  _password: string,
 ): Promise<void> {
-  await page.goto('/login', { waitUntil: 'domcontentloaded' });
+  initAdmin();
+  const { uid } = await admin.auth().getUserByEmail(email);
+  const customToken = await admin.auth().createCustomToken(uid);
 
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Password').fill(password);
-  await page.getByRole('button', { name: 'Sign In' }).click();
-
+  await page.goto(`/test-auth?token=${encodeURIComponent(customToken)}`, {
+    waitUntil: 'domcontentloaded',
+  });
   await page.waitForURL('**/groups**', { timeout: 30_000 });
 }

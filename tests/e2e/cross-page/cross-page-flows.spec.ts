@@ -57,8 +57,9 @@ test.describe('B-02: Create match → member bets → declare result → check p
     await pageMember.waitForLoadState('domcontentloaded');
     await pageMember.waitForTimeout(1500);
 
-    await pageMember.getByRole('button', { name: /Place Bet/i }).first().click();
-    await pageMember.getByRole('button', { name: 'India' }).first().click();
+    const b02MatchCard = pageMember.locator('div').filter({ hasText: /India.*Australia|Australia.*India/ }).filter({ has: pageMember.getByRole('button', { name: /Place Bet/i }) }).last();
+    await b02MatchCard.getByRole('button', { name: /Place Bet/i }).first().click();
+    await b02MatchCard.getByRole('button', { name: 'India' }).first().click();
     await pageMember.getByPlaceholder('Custom amount').fill('1000');
     await pageMember.getByRole('button', { name: /Confirm Bet/i }).click();
     await expect(pageMember.getByText(/placed successfully/i)).toBeVisible({ timeout: 15_000 });
