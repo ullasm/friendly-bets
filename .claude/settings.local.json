@@ -3,7 +3,22 @@
     "allow": [
       "Bash(npm install *)",
       "Bash(npx playwright *)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(dotnet --version)",
+      "Bash(dotnet new *)",
+      "Bash(dotnet sln *)",
+      "Bash(dotnet add *)",
+      "Bash(dotnet build *)",
+      "Bash(dotnet restore *)",
+      "Bash(dotnet tool *)",
+      "Bash(ng version *)",
+      "Bash(ng new *)",
+      "Bash(npx ng *)",
+      "Bash(xargs -I {} bash -c 'echo \"=== {} ===\" && head -30 {}')",
+      "Read(//c/c/DriveX/Work/FriendlyBets/Code/Version2/FriendlyBets.Web/**)",
+      "Bash(npm uninstall *)",
+      "Bash(grep -E \"\\\\.cs$\")",
+      "Bash(node --check migrate-all.js)"
     ]
   }
 }
