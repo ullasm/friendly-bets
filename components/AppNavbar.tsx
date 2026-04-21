@@ -128,7 +128,7 @@ export default function AppNavbar({
             <Avatar name={userProfile.displayName} color={userProfile.avatarColor} size="md" />
             <div className="min-w-0">
               <p className="text-[13px] font-semibold text-[var(--text-primary)] truncate">{userProfile.displayName}</p>
-              <p className="text-xs text-[var(--text-muted)]">{userProfile.totalPoints} pts</p>
+              <p className="text-xs text-[var(--text-muted)]">{userProfile.email}</p>
             </div>
           </div>
 

@@ -8,7 +8,6 @@ import {
   deleteDoc,
   query,
   where,
-  orderBy,
   limit,
   serverTimestamp,
   Timestamp,
@@ -44,7 +43,6 @@ export interface LeaderboardUser {
   uid: string;
   displayName: string;
   email: string;
-  totalPoints: number;
   role: 'admin' | 'member';
   avatarColor: string;
 }
@@ -405,14 +403,6 @@ export async function adminClearBetForMatch(
   }
 }
 
-// -- leaderboard --------------------------------------------------------------
-
-export async function getAllUsers(): Promise<LeaderboardUser[]> {
-  const snap = await getDocs(
-    query(collection(db, 'users'), orderBy('totalPoints', 'desc'))
-  );
-  return snap.docs.map((d) => d.data() as LeaderboardUser);
-}
 
 
 

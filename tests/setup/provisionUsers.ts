@@ -274,7 +274,6 @@ async function provisionFirestore(
       uid,
       displayName: user.name,
       email: user.email,
-      totalPoints: 0,
       role: 'member',
       avatarColor: user.avatarColor,
       groupIds: [],          // will be updated per-group below
@@ -332,7 +331,6 @@ async function provisionFirestore(
         displayName: user.name,
         avatarColor: uniqueUser.avatarColor,
         role,
-        totalPoints: 0,
         joinedAt: now,
         ...testMeta,
       });

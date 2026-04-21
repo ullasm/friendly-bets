@@ -153,9 +153,6 @@ function ProfileContent() {
               {userProfile.displayName}
             </p>
             <p className="text-sm text-[var(--text-muted)]">{userProfile.email}</p>
-            <p className="text-sm font-semibold text-green-400 mt-1">
-              {userProfile.totalPoints} pts total
-            </p>
           </div>
         </Card>
 

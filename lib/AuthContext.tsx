@@ -9,7 +9,6 @@ export interface UserProfile {
   uid: string;
   displayName: string;
   email: string;
-  totalPoints: number;
   role: 'admin' | 'member';
   avatarColor: string;
   groupIds?: string[];
@@ -53,8 +52,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (firebaseUser) {
         // Real-time listener on the user's Firestore profile.
-        // This means any admin-side write to users/{uid} (totalPoints,
-        // displayName, avatarColor) is reflected globally without a refresh.
+        // This means any admin-side write to users/{uid} (displayName, avatarColor)
+        // is reflected globally without a refresh.
         profileUnsub = onSnapshot(
           doc(db, 'users', firebaseUser.uid),
           (snap) => {
