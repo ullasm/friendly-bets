@@ -18,7 +18,8 @@
       "Read(//c/c/DriveX/Work/FriendlyBets/Code/Version2/FriendlyBets.Web/**)",
       "Bash(npm uninstall *)",
       "Bash(grep -E \"\\\\.cs$\")",
-      "Bash(node --check migrate-all.js)"
+      "Bash(node --check migrate-all.js)",
+      "Bash(node -e ' *)"
     ]
   }
 }

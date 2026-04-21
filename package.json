@@ -14,7 +14,8 @@
     "test:e2e": "npx playwright test",
     "test:e2e:ui": "npx playwright test --ui",
     "test:report": "npx playwright show-report tests/playwright-report",
-    "test:teardown": "tsx scripts/test-teardown.ts"
+    "test:teardown": "tsx scripts/test-teardown.ts",
+    "test:remove": "tsx scripts/test-teardown.ts"
   },
   "dependencies": {
     "firebase": "^12.11.0",
