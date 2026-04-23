@@ -35,7 +35,7 @@ interface LedgerMatch {
 }
 
 const showSettlements = process.env.NEXT_PUBLIC_SHOW_SETTLEMENTS === 'true';
-const showLedger = process.env.NEXT_PUBLIC_SHOW_LEDGER !== 'false'; // default true
+const showLedger = process.env.NEXT_PUBLIC_SHOW_LEDGER === 'true'; // must be explicitly enabled
 
 function PointsContent() {
   const params = useParams<{ groupId: string }>();
