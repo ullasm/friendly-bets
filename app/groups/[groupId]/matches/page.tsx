@@ -1064,15 +1064,19 @@ function GroupAdminContent() {
                         <Badge variant={matchStatusVariant(match.status)}>
                           {match.status.charAt(0).toUpperCase() + match.status.slice(1)}
                         </Badge>
-                        <Button variant="secondary" size="sm" onClick={() => openManageBets(match)}>
-                          Manage Bets
-                        </Button>
-                        <Button variant="secondary" size="sm" onClick={() => openEdit(match)}>
-                          Edit
-                        </Button>
-                        <Button variant="ghost-danger" size="sm" onClick={() => setConfirmDelete(match)}>
-                          Delete
-                        </Button>
+                        {process.env.NEXT_PUBLIC_SHOW_MANAGE_BIDS === 'true' && (
+                          <>
+                            <Button variant="secondary" size="sm" onClick={() => openManageBets(match)}>
+                              Manage Bets
+                            </Button>
+                            <Button variant="secondary" size="sm" onClick={() => openEdit(match)}>
+                              Edit
+                            </Button>
+                            <Button variant="ghost-danger" size="sm" onClick={() => setConfirmDelete(match)}>
+                              Delete
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </div>
 
@@ -1080,7 +1084,7 @@ function GroupAdminContent() {
 
                     <div className="flex flex-wrap items-center gap-3 pt-1">
                       {/* Betting toggle: dynamic color (yellow=open, muted=closed), no Button variant — left as raw button */}
-                      {canToggleBetting && (
+                      {canToggleBetting && process.env.NEXT_PUBLIC_SHOW_MANAGE_BIDS === 'true' && (
                         <button
                           onClick={() => handleToggleBetting(match)}
                           disabled={togglingBet[match.id]}
@@ -1096,38 +1100,42 @@ function GroupAdminContent() {
                       <span className="text-xs text-[var(--text-muted)] italic">Current result: {getResultLabel(match)}</span>
                     </div>
 
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {/* Inline result select: px-3 py-1.5 sizing, no label, used in flex row — left as raw select */}
-                      <select
-                        value={displayedResult}
-                        onChange={(e) =>
-                          setSelectedResult((p) => ({ ...p, [match.id]: e.target.value as ResultOption }))
-                        }
-                        className="rounded-lg bg-[var(--bg-input)] border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                      >
-                        <option value="" disabled>{match.result === 'pending' ? 'Declare result...' : 'Update result...'}</option>
-                        <option value="team_a">{match.teamA} wins</option>
-                        <option value="team_b">{match.teamB} wins</option>
-                        {match.drawAllowed && <option value="draw">Draw</option>}
-                        <option value="abandoned">Abandoned</option>
-                      </select>
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        disabled={!displayedResult}
-                        loading={declaring[match.id]}
-                        onClick={() => handleDeclareResult(match)}
-                      >
-                        {match.status === 'completed' || match.status === 'abandoned'
-                          ? 'Update Result'
-                          : 'Confirm'}
-                      </Button>
-                    </div>
+                    {(process.env.NEXT_PUBLIC_SHOW_MANAGE_BIDS === 'true' || match.result === 'pending') && (
+                      <>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {/* Inline result select: px-3 py-1.5 sizing, no label, used in flex row — left as raw select */}
+                          <select
+                            value={displayedResult}
+                            onChange={(e) =>
+                              setSelectedResult((p) => ({ ...p, [match.id]: e.target.value as ResultOption }))
+                            }
+                            className="rounded-lg bg-[var(--bg-input)] border border-[var(--border)] px-3 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                          >
+                            <option value="" disabled>{match.result === 'pending' ? 'Declare result...' : 'Update result...'}</option>
+                            <option value="team_a">{match.teamA} wins</option>
+                            <option value="team_b">{match.teamB} wins</option>
+                            {match.drawAllowed && <option value="draw">Draw</option>}
+                            <option value="abandoned">Abandoned</option>
+                          </select>
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            disabled={!displayedResult}
+                            loading={declaring[match.id]}
+                            onClick={() => handleDeclareResult(match)}
+                          >
+                            {match.status === 'completed' || match.status === 'abandoned'
+                              ? 'Update Result'
+                              : 'Confirm'}
+                          </Button>
+                        </div>
 
-                    {(match.status === 'completed' || match.status === 'abandoned') && (
-                      <p className="text-xs text-[var(--text-muted)]">
-                        Updating a declared match or member bet will roll back old points and settle again using the latest data.
-                      </p>
+                        {(match.status === 'completed' || match.status === 'abandoned') && (
+                          <p className="text-xs text-[var(--text-muted)]">
+                            Updating a declared match or member bet will roll back old points and settle again using the latest data.
+                          </p>
+                        )}
+                      </>
                     )}
 
                     {/* Betting details */}
