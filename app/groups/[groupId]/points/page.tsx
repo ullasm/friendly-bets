@@ -94,7 +94,7 @@ function PointsContent() {
           await Promise.all(
             updated.map(async (member) => {
               try {
-                const bets = await getLastNBetsForUser(groupId, member.userId, 5);
+                const bets = await getLastNBetsForUser(groupId, member.userId, 10);
                 const betsWithMatchNames = await Promise.all(
                   bets.map(async (bet) => {
                     try {
@@ -376,7 +376,7 @@ function PointsContent() {
                                 );
                               })}
                               {/* Ghost dots for remaining slots to maintain consistent width */}
-                              {Array.from({ length: 5 - (memberBetTrends[m.userId] || []).length }).map((_, idx) => (
+                              {Array.from({ length: 10 - (memberBetTrends[m.userId] || []).length }).map((_, idx) => (
                                 <div
                                   key={`ghost-${idx}`}
                                   style={{
