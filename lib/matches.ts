@@ -102,26 +102,13 @@ export async function createMatch(
 
 export async function updateMatch(
   matchId: string,
-  fields: Partial<Pick<Match, 'teamA' | 'teamB' | 'format' | 'drawAllowed' | 'noDrawPolicy' | 'matchDate' | 'bettingOpen'>>
+  updates: Partial<Match>
 ): Promise<void> {
-  if (process.env.ALLOW_MANAGE_MATCHES !== 'true') {
-    throw new Error('Match management is disabled');
-  }
-  await updateDoc(doc(db, 'matches', matchId), fields as Record<string, unknown>);
+  await updateDoc(doc(db, 'matches', matchId), updates);
 }
 
 export async function deleteMatch(matchId: string): Promise<void> {
-  if (process.env.ALLOW_MANAGE_MATCHES !== 'true') {
-    throw new Error('Match management is disabled');
-  }
   await deleteDoc(doc(db, 'matches', matchId));
-}
-
-export async function closeBettingForMatch(matchId: string): Promise<void> {
-  await updateDoc(doc(db, 'matches', matchId), {
-    bettingOpen: false,
-    bettingClosedAt: Timestamp.now(),
-  });
 }
 
 // -- bet functions ------------------------------------------------------------
@@ -130,72 +117,113 @@ export async function placeBet(
   matchId: string,
   groupId: string,
   userId: string,
-  pickedOutcome: 'team_a' | 'team_b' | 'draw',
-  stake: number
-): Promise<string> {
-  const ref = await addDoc(collection(db, 'bets'), {
-    matchId,
-    groupId,
-    userId,
-    pickedOutcome,
-    stake,
-    pointsDelta: null,
-    status: 'pending',
-    placedAt: serverTimestamp(),
-  });
-  return ref.id;
+  bet: BetInput
+): Promise<void> {
+  // Check if user already has a bet for this match
+  const existingBet = await getUserBetForMatch(matchId, userId);
+  if (existingBet) {
+    // Update existing bet
+    await updateDoc(doc(db, 'bets', existingBet.id), {
+      pickedOutcome: bet.pickedOutcome,
+      stake: bet.stake,
+      placedAt: serverTimestamp(),
+    });
+  } else {
+    // Create new bet
+    await addDoc(collection(db, 'bets'), {
+      matchId,
+      groupId,
+      userId,
+      pickedOutcome: bet.pickedOutcome,
+      stake: bet.stake,
+      pointsDelta: null,
+      status: 'pending',
+      placedAt: serverTimestamp(),
+    });
+  }
 }
 
+export async function getUserBetForMatch(
+  matchId: string,
+  userId: string
+): Promise<Bet | null> {
+  const snap = await getDocs(
+    query(
+      collection(db, 'bets'),
+      where('matchId', '==', matchId),
+      where('userId', '==', userId),
+      limit(1)
+    )
+  );
+  if (snap.empty) return null;
+  const d = snap.docs[0];
+  return { id: d.id, ...d.data() } as Bet;
+}
+
+/**
+ * Upserts (creates or updates) a user's bet for a match.
+ * Used by the betting UI.
+ * @returns The bet ID if a new bet was created, void if updated
+ */
 export async function upsertUserBetForMatch(
   matchId: string,
   groupId: string,
   userId: string,
-  pickedOutcome: 'team_a' | 'team_b' | 'draw',
+  pickedOutcome: Bet['pickedOutcome'],
   stake: number
-): Promise<string> {
-  const match = await getMatchById(matchId);
-  if (!match) {
-    throw new Error('Match not found');
-  }
-
-  const canEditBet = (match.status === 'upcoming' || match.status === 'live') && match.bettingOpen;
-  if (!canEditBet) {
-    throw new Error('Betting is closed for this match');
-  }
-
+): Promise<string | void> {
   const existingBet = await getUserBetForMatch(matchId, userId);
+  
   if (existingBet) {
+    // Update existing bet
     await updateDoc(doc(db, 'bets', existingBet.id), {
       pickedOutcome,
       stake,
-      status: 'pending',
-      pointsDelta: null,
       placedAt: serverTimestamp(),
     });
-    return existingBet.id;
+  } else {
+    // Create new bet
+    const ref = await addDoc(collection(db, 'bets'), {
+      matchId,
+      groupId,
+      userId,
+      pickedOutcome,
+      stake,
+      pointsDelta: null,
+      status: 'pending',
+      placedAt: serverTimestamp(),
+    });
+    return ref.id;
   }
-
-  return placeBet(matchId, groupId, userId, pickedOutcome, stake);
 }
 
+/**
+ * Removes a user's bet for a match.
+ * Used by the betting UI.
+ */
 export async function removeUserBetForMatch(
   matchId: string,
   userId: string
 ): Promise<void> {
-  const match = await getMatchById(matchId);
-  if (!match) throw new Error('Match not found');
-
-  const canEditBet = (match.status === 'upcoming' || match.status === 'live') && match.bettingOpen;
-  if (!canEditBet) throw new Error('Betting is closed for this match');
-
   const existingBet = await getUserBetForMatch(matchId, userId);
-  if (!existingBet) throw new Error('No bet found to remove');
-
-  await deleteDoc(doc(db, 'bets', existingBet.id));
+  if (existingBet) {
+    await deleteDoc(doc(db, 'bets', existingBet.id));
+  }
 }
 
 /**
- * Returns all bets placed by a user within a specific group.
+ * Closes betting for a match by setting bettingOpen to false.
+ * Used by the group dashboard for admin actions.
+ */
+export async function closeBettingForMatch(matchId: string): Promise<void> {
+  await updateDoc(doc(db, 'matches', matchId), {
+    bettingOpen: false,
+    bettingClosedAt: serverTimestamp(),
+  });
+}
+
+/**
+ * Returns all bets for a user in a group.
  * Requires composite index: bets [ userId ASC, groupId ASC ]
  */
 export async function getUserBetsForGroup(
@@ -210,6 +238,31 @@ export async function getUserBetsForGroup(
     )
   );
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Bet));
+}
+
+/**
+ * Returns the last N settled bets for a user in a group, ordered by placedAt descending.
+ * Only includes bets with status 'won', 'lost', 'refunded', or 'locked' (excludes 'pending').
+ * Requires composite index: bets [ userId ASC, groupId ASC, placedAt DESC ]
+ */
+export async function getLastNBetsForUser(
+  groupId: string,
+  userId: string,
+  n: number = 5
+): Promise<Bet[]> {
+  const snap = await getDocs(
+    query(
+      collection(db, 'bets'),
+      where('userId', '==', userId),
+      where('groupId', '==', groupId)
+    )
+  );
+  
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() } as Bet))
+    .filter((bet) => bet.status !== 'pending')
+    .sort((a, b) => b.placedAt.toMillis() - a.placedAt.toMillis())
+    .slice(0, n);
 }
 
 /**
@@ -236,27 +289,6 @@ export async function getBetsForMatch(matchId: string, groupId: string): Promise
     )
   );
   return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Bet));
-}
-
-/**
- * Returns the single bet a user placed on a specific match, or null.
- * Requires composite index: bets [ userId ASC, matchId ASC ]
- */
-export async function getUserBetForMatch(
-  matchId: string,
-  userId: string
-): Promise<Bet | null> {
-  const snap = await getDocs(
-    query(
-      collection(db, 'bets'),
-      where('userId', '==', userId),
-      where('matchId', '==', matchId),
-      limit(1)
-    )
-  );
-  if (snap.empty) return null;
-  const d = snap.docs[0];
-  return { id: d.id, ...d.data() } as Bet;
 }
 
 /**
@@ -418,14 +450,19 @@ export async function adminClearBetForMatch(
   }
 }
 
-
-
-
-
-
-
-
-
-
-
-
+/**
+ * Returns all completed matches for a group, ordered by matchDate ascending.
+ * Used for the running total ledger to show match history chronologically.
+ */
+export async function getCompletedMatchesForGroup(groupId: string): Promise<Match[]> {
+  const snap = await getDocs(
+    query(
+      collection(db, 'matches'),
+      where('groupId', '==', groupId),
+      where('status', '==', 'completed')
+    )
+  );
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data() } as Match))
+    .sort((a, b) => a.matchDate.toMillis() - b.matchDate.toMillis());
+}

@@ -106,7 +106,7 @@ function MatchCard({ match, groupId, myBet, bets, memberNames, currentUserId, on
     try {
       const betId = await upsertUserBetForMatch(match.id, groupId, currentUserId, selectedOutcome, stake);
       const updatedBet: Bet = {
-        id: myBet?.id ?? betId,
+        id: myBet?.id ?? (betId as string),
         matchId: match.id,
         groupId,
         userId: currentUserId,

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import toast from 'react-hot-toast';
-import { collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, getDoc, doc, getDocs } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import AppNavbar, { type NavTab } from '@/components/AppNavbar';
 import ProtectedRoute from '@/components/ProtectedRoute';
@@ -13,9 +13,29 @@ import { getGroupById, getUserGroupMember } from '@/lib/groups';
 import type { Group, GroupMember } from '@/lib/groups';
 import { computeSettlements, acknowledgeSettlement } from '@/lib/settlements';
 import type { ComputedSettlement, Settlement } from '@/lib/settlements';
+import { getLastNBetsForUser, getBetsForGroup, type Match, type Bet } from '@/lib/matches';
 import { Spinner, Badge, Card, Avatar, SectionHeader } from '@/components/ui';
+import { RunningTotalLedger } from '@/components/RunningTotalLedger';
+
+// Type for bet trend result
+interface BetTrend {
+  status: 'won' | 'lost' | 'refunded' | 'locked' | 'pending';
+  pointsDelta: number | null;
+  matchName: string;
+}
+
+// Type for ledger match data
+interface LedgerMatch {
+  matchId: string;
+  matchName: string;
+  matchDate: Date;
+  winner: string;
+  teamA: string;
+  teamB: string;
+}
 
 const showSettlements = process.env.NEXT_PUBLIC_SHOW_SETTLEMENTS === 'true';
+const showLedger = process.env.NEXT_PUBLIC_SHOW_LEDGER !== 'false'; // default true
 
 function PointsContent() {
   const params = useParams<{ groupId: string }>();
@@ -28,6 +48,9 @@ function PointsContent() {
   const [groupSettlements, setGroupSettlements] = useState<Settlement[]>([]);
   const [acknowledgingSettlements, setAcknowledgingSettlements] = useState<Set<string>>(new Set());
   const [confirmInputs, setConfirmInputs] = useState<Record<string, string>>({});
+  const [memberBetTrends, setMemberBetTrends] = useState<Record<string, BetTrend[]>>({});
+  const [completedMatches, setCompletedMatches] = useState<LedgerMatch[]>([]);
+  const [groupBets, setGroupBets] = useState<Bet[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -58,12 +81,58 @@ function PointsContent() {
 
     membersUnsub = onSnapshot(
       query(collection(db, 'groups', groupId, 'members'), orderBy('totalPoints', 'desc')),
-      (snap) => {
+      async (snap) => {
         if (cancelled) return;
         const updated = snap.docs.map((d) => d.data() as GroupMember);
         setMembers(updated);
         const mine = updated.find((m) => m.userId === user.uid);
         if (mine) setMyMember(mine);
+        
+        // Fetch last 5 bets for each member with match details
+        const trendsWithMatches: Record<string, BetTrend[]> = {};
+        try {
+          await Promise.all(
+            updated.map(async (member) => {
+              try {
+                const bets = await getLastNBetsForUser(groupId, member.userId, 5);
+                const betsWithMatchNames = await Promise.all(
+                  bets.map(async (bet) => {
+                    try {
+                      const matchSnap = await getDoc(doc(db, 'matches', bet.matchId));
+                      const matchData = matchSnap.exists() ? matchSnap.data() : null;
+                      const matchName = matchData
+                        ? `${matchData.teamA} vs ${matchData.teamB}`
+                        : 'Unknown Match';
+                      return {
+                        status: bet.status,
+                        pointsDelta: bet.pointsDelta,
+                        matchName,
+                      };
+                    } catch (matchErr) {
+                      console.error(`Error fetching match ${bet.matchId}:`, matchErr);
+                      return {
+                        status: bet.status,
+                        pointsDelta: bet.pointsDelta,
+                        matchName: 'Unknown Match',
+                      };
+                    }
+                  })
+                );
+                trendsWithMatches[member.userId] = betsWithMatchNames;
+              } catch (betsErr) {
+                console.error(`[BetTrends] Error fetching bets for member ${member.displayName}:`, betsErr);
+                trendsWithMatches[member.userId] = [];
+              }
+            })
+          );
+          
+          if (!cancelled) {
+            setMemberBetTrends(trendsWithMatches);
+          }
+        } catch (err) {
+          console.error('Error fetching bet trends:', err);
+        }
+        
         setLoading(false);
       },
       (err) => {
@@ -82,6 +151,62 @@ function PointsContent() {
         if (err.code === 'permission-denied') return;
       }
     );
+
+    // Fetch completed matches for the ledger
+    const fetchMatchesAndBets = async () => {
+      try {
+        // Get completed matches
+        const matchesSnap = await getDocs(
+          query(
+            collection(db, 'matches'),
+            where('groupId', '==', groupId),
+            where('status', '==', 'completed')
+          )
+        );
+        
+        const matches: LedgerMatch[] = matchesSnap.docs
+          .map((d) => {
+            const data = d.data() as Match;
+            let winner = 'TBD';
+            if (data.result === 'team_a') winner = data.teamA;
+            else if (data.result === 'team_b') winner = data.teamB;
+            else if (data.result === 'draw') winner = 'Draw';
+            else if (data.result === 'abandoned') winner = 'Abandoned';
+            
+            return {
+              matchId: d.id,
+              matchName: `${data.teamA} vs ${data.teamB}`,
+              matchDate: data.matchDate.toDate(),
+              winner,
+              teamA: data.teamA,
+              teamB: data.teamB,
+            };
+          })
+          .sort((a, b) => a.matchDate.getTime() - b.matchDate.getTime());
+        
+        if (!cancelled) {
+          setCompletedMatches(matches);
+        }
+
+        // Get all bets for the group
+        const betsSnap = await getDocs(
+          query(collection(db, 'bets'), where('groupId', '==', groupId))
+        );
+        
+        const bets: Bet[] = betsSnap.docs.map((d) => ({ 
+          id: d.id, 
+          ...d.data() 
+        } as Bet));
+        
+        if (!cancelled) {
+          setGroupBets(bets);
+        }
+      } catch (err) {
+        console.error('Error fetching matches and bets for ledger:', err);
+      }
+    };
+
+    fetchMatchesAndBets();
 
     return () => {
       cancelled = true;
@@ -148,6 +273,11 @@ function PointsContent() {
 
   const allSettlementRows = [...outstanding, ...acknowledgedRows];
 
+  // Filter bets to only include those for completed matches (for the ledger)
+  const ledgerBets = groupBets.filter(bet => 
+    completedMatches.some(m => m.matchId === bet.matchId)
+  );
+
   return (
     <div className="min-h-screen bg-[var(--bg-primary)] text-[var(--text-primary)]">
       <AppNavbar
@@ -190,13 +320,79 @@ function PointsContent() {
                     <div className="flex items-center gap-3">
                       <span className="text-[var(--text-muted)] text-sm w-5 text-right">{i + 1}</span>
                       <Avatar name={m.displayName} color={m.avatarColor} size="sm" />
-                      <span className="text-sm text-[var(--text-primary)]">{m.displayName}</span>
-                      {isMe && (
-                        <span className="text-xs text-green-500 font-medium">(you)</span>
-                      )}
-                      {m.role === 'admin' && (
-                        <Badge variant="role-admin" shape="tag">Admin</Badge>
-                      )}
+                      <div className="flex flex-col pt-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-[var(--text-primary)]">{m.displayName}</span>
+                          {isMe && (
+                            <span className="text-xs text-green-500 font-medium">(you)</span>
+                          )}
+                          {m.role === 'admin' && (
+                            <Badge variant="role-admin" shape="tag">Admin</Badge>
+                          )}
+                        </div>
+                        {/* Last 5 Bets Trend Indicator */}
+                        <div className="flex items-center gap-[6px] mt-2 mb-1">
+                          {(memberBetTrends[m.userId] || []).length === 0 ? (
+                            <span className="text-[10px] text-[var(--text-muted)]">No bets yet</span>
+                          ) : (
+                            <>
+                              {/* Render actual bet dots */}
+                              {[...(memberBetTrends[m.userId] || [])].reverse().map((trend, idx) => {
+                                const tooltipText = `${trend.matchName}: ${trend.pointsDelta && trend.pointsDelta > 0 ? '+' : ''}${trend.pointsDelta ?? 0} pts`;
+                                
+                                // Determine color based on status - matching app colors
+                                // Blue: match text-green-400 (accent color for positive)
+                                // Red: match text-red-400 (ghost-danger color)
+                                let bgColor = 'rgba(100, 116, 139, 0.6)'; // default gray for refunded
+                                if (trend.status === 'won') bgColor = 'var(--accent-text, #5DADE2)'; // blue accent
+                                else if (trend.status === 'lost') bgColor = 'rgba(248, 113, 113, 0.8)'; // red-400 equivalent
+                                else if (trend.status === 'locked') bgColor = 'rgba(245, 158, 11, 0.8)'; // amber
+                                
+                                return (
+                                  <div
+                                    key={idx}
+                                    className="bet-trend-dot"
+                                    data-status={trend.status}
+                                    title={tooltipText}
+                                    style={{
+                                      width: '12px',
+                                      height: '12px',
+                                      borderRadius: '50%',
+                                      backgroundColor: bgColor,
+                                      flexShrink: 0,
+                                      opacity: 0.8,
+                                      transition: 'opacity 0.15s ease, transform 0.15s ease',
+                                      cursor: 'help',
+                                    }}
+                                    onMouseEnter={(e) => {
+                                      e.currentTarget.style.opacity = '1';
+                                      e.currentTarget.style.transform = 'scale(1.2)';
+                                    }}
+                                    onMouseLeave={(e) => {
+                                      e.currentTarget.style.opacity = '0.8';
+                                      e.currentTarget.style.transform = 'scale(1)';
+                                    }}
+                                  />
+                                );
+                              })}
+                              {/* Ghost dots for remaining slots to maintain consistent width */}
+                              {Array.from({ length: 5 - (memberBetTrends[m.userId] || []).length }).map((_, idx) => (
+                                <div
+                                  key={`ghost-${idx}`}
+                                  style={{
+                                    width: '12px',
+                                    height: '12px',
+                                    borderRadius: '50%',
+                                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                                    backgroundColor: 'transparent',
+                                    flexShrink: 0,
+                                  }}
+                                />
+                              ))}
+                            </>
+                          )}
+                        </div>
+                      </div>
                     </div>
                     <span className="text-sm font-semibold text-green-400">
                       {m.totalPoints} pts
@@ -207,6 +403,19 @@ function PointsContent() {
             </ol>
           )}
         </Card>
+
+        {/* Running Total Ledger */}
+        {showLedger && completedMatches.length > 0 && (
+          <Card variant="default">
+            <SectionHeader title="Match History Ledger" mb="mb-4" />
+            <RunningTotalLedger
+              members={members}
+              matches={completedMatches}
+              bets={ledgerBets}
+              currentUserId={user?.uid ?? ''}
+            />
+          </Card>
+        )}
 
         {/* Settlements */}
         {showSettlements && <Card variant="default">
@@ -248,7 +457,7 @@ function PointsContent() {
                           {isRecipient && !isAcknowledged ? (
                             <div className="flex flex-col items-end gap-1.5">
                               <span className="text-[10px] text-[var(--text-muted)]">
-                                Type &quot;{expectedPhrase}&quot; then click Received
+                                Type "{expectedPhrase}" then click Received
                               </span>
                               <div className="flex items-center gap-2">
                                 <input
