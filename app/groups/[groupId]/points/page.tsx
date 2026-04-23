@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -355,8 +356,8 @@ function PointsContent() {
                                     data-status={trend.status}
                                     title={tooltipText}
                                     style={{
-                                      width: '12px',
-                                      height: '12px',
+                                      width: '10px',
+                                      height: '10px',
                                       borderRadius: '50%',
                                       backgroundColor: bgColor,
                                       flexShrink: 0,
@@ -380,8 +381,8 @@ function PointsContent() {
                                 <div
                                   key={`ghost-${idx}`}
                                   style={{
-                                    width: '12px',
-                                    height: '12px',
+                                    width: '10px',
+                                    height: '10px',
                                     borderRadius: '50%',
                                     border: '1px solid rgba(255, 255, 255, 0.1)',
                                     backgroundColor: 'transparent',
