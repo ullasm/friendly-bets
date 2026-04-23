@@ -220,6 +220,9 @@ export async function demoteMember(groupId: string, userId: string): Promise<voi
 }
 
 export async function removeMember(groupId: string, userId: string): Promise<void> {
+  if (process.env.ALLOW_REMOVE_FROM_GROUP !== 'true') {
+    throw new Error('Member removal is disabled');
+  }
   await deleteDoc(doc(db, 'groups', groupId, 'members', userId));
 }
 

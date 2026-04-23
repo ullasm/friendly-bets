@@ -550,14 +550,16 @@ function ManageContent() {
                           Remove Admin
                         </button>
                       )}
-                      <Button
-                        variant="ghost-danger"
-                        size="sm"
-                        disabled={loading}
-                        onClick={() => setConfirmRemove(m)}
-                      >
-                        Remove
-                      </Button>
+                      {process.env.NEXT_PUBLIC_ALLOW_REMOVE_FROM_GROUP === 'true' && (
+                        <Button
+                          variant="ghost-danger"
+                          size="sm"
+                          disabled={loading}
+                          onClick={() => setConfirmRemove(m)}
+                        >
+                          Remove
+                        </Button>
+                      )}
                     </div>
                   )}
                 </li>
