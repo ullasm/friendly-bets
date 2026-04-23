@@ -95,7 +95,7 @@ function PointsContent() {
           await Promise.all(
             updated.map(async (member) => {
               try {
-                const bets = await getLastNBetsForUser(groupId, member.userId, 10);
+                const bets = await getLastNBetsForUser(groupId, member.userId, 7);
                 const betsWithMatchNames = await Promise.all(
                   bets.map(async (bet) => {
                     try {
@@ -356,8 +356,8 @@ function PointsContent() {
                                     data-status={trend.status}
                                     title={tooltipText}
                                     style={{
-                                      width: '10px',
-                                      height: '10px',
+                                      width: '14px',
+                                      height: '14px',
                                       borderRadius: '50%',
                                       backgroundColor: bgColor,
                                       flexShrink: 0,
@@ -377,12 +377,12 @@ function PointsContent() {
                                 );
                               })}
                               {/* Ghost dots for remaining slots to maintain consistent width */}
-                              {Array.from({ length: 10 - (memberBetTrends[m.userId] || []).length }).map((_, idx) => (
+                              {Array.from({ length: 7 - (memberBetTrends[m.userId] || []).length }).map((_, idx) => (
                                 <div
                                   key={`ghost-${idx}`}
                                   style={{
-                                    width: '10px',
-                                    height: '10px',
+                                    width: '14px',
+                                    height: '14px',
                                     borderRadius: '50%',
                                     border: '1px solid rgba(255, 255, 255, 0.1)',
                                     backgroundColor: 'transparent',
