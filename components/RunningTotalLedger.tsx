@@ -292,24 +292,12 @@ export function RunningTotalLedger({
           <table className="w-full border-collapse">
             <thead>
               <tr className="text-left">
-                {/* Sticky first column group headers — z-30 to stay above scrolling content */}
+                {/* Sticky first column — Date + Match / Result merged */}
                 <th
-                  className="sticky top-0 left-0 z-30 py-2 px-2 text-xs font-medium text-[var(--text-muted)] bg-[#1a2235] border-b border-r border-[var(--border)] whitespace-nowrap"
-                  style={{ minWidth: '100px' }}
+                  className="sticky top-0 left-0 z-30 py-2 px-2 text-xs font-medium text-[var(--text-muted)] bg-[#1a2235] border-b border-r border-[var(--border)] shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]"
+                  style={{ minWidth: '320px' }}
                 >
-                  Date
-                </th>
-                <th
-                  className="sticky top-0 left-[100px] z-30 py-2 px-2 text-xs font-medium text-[var(--text-muted)] bg-[#1a2235] border-b border-r border-[var(--border)] whitespace-nowrap"
-                  style={{ minWidth: '140px' }}
-                >
-                  Match
-                </th>
-                <th
-                  className="sticky top-0 left-[240px] z-30 py-2 px-2 text-xs font-medium text-[var(--text-muted)] bg-[#1a2235] border-b border-r border-[var(--border)] shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]"
-                  style={{ minWidth: '80px' }}
-                >
-                  Result
+                  Date / Match / Result
                 </th>
                 {/* Member columns — z-20 so they scroll under the sticky group headers */}
                 {visibleMembers.map((member) => (
@@ -330,7 +318,7 @@ export function RunningTotalLedger({
               {ledgerRows.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={3 + visibleMembers.length}
+                    colSpan={1 + visibleMembers.length}
                     className="py-8 text-center text-xs text-[var(--text-muted)]"
                   >
                     No matches with bets yet.
@@ -345,32 +333,23 @@ export function RunningTotalLedger({
                       key={`${row.type}-${row.matchIndex}`}
                       className={isRunningTotal ? 'bg-[#16202e]' : ''}
                     >
-                      {/* Sticky Date column — z-10 to stay above horizontally scrolling cells */}
+                      {/* Sticky merged column — Date + Match / Result — shadow creates visual edge when scrolling */}
                       <td
-                        className="sticky-col sticky left-0 z-10 py-1.5 px-2 text-xs text-[var(--text-primary)] border-r border-[var(--border)] whitespace-nowrap bg-[#1a2235]"
-                      >
-                        {isRunningTotal ? '' : formatDate(row.match!.matchDate)}
-                      </td>
-
-                      {/* Sticky Match column */}
-                      <td
-                        className="sticky-col sticky left-[100px] z-10 py-1.5 px-2 text-xs text-[var(--text-primary)] border-r border-[var(--border)] whitespace-nowrap bg-[#1a2235]"
+                        className="sticky-col sticky left-0 z-10 py-1.5 px-2 text-xs text-[var(--text-primary)] border-r border-[var(--border)] bg-[#1a2235] shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]"
                       >
                         {isRunningTotal ? (
                           <span className="text-[var(--text-muted)] text-[10px] font-medium tracking-wide uppercase">
                             Running Total
                           </span>
                         ) : (
-                          <span className="text-xs">{row.match!.matchName}</span>
-                        )}
-                      </td>
-
-                      {/* Sticky Result column — shadow creates visual edge when scrolling */}
-                      <td
-                        className="sticky-col sticky left-[240px] z-10 py-1.5 px-2 text-xs text-[var(--text-primary)] border-r border-[var(--border)] bg-[#1a2235] shadow-[4px_0_10px_-2px_rgba(0,0,0,0.5)]"
-                      >
-                        {isRunningTotal ? '' : (
-                          <span className="text-xs">{getWinnerDisplay(row.match!)}</span>
+                          <span className="text-xs">
+                            <span className="text-[var(--text-muted)]">{formatDate(row.match!.matchDate)}</span>
+                            <span className="mx-2 text-[var(--text-muted)]">—</span>
+                            {row.match!.matchName}
+                            <span className="text-[var(--text-muted)] ml-2">
+                              — {getWinnerDisplay(row.match!)}
+                            </span>
+                          </span>
                         )}
                       </td>
 
