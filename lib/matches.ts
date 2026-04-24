@@ -241,9 +241,9 @@ export async function getUserBetsForGroup(
 }
 
 /**
- * Returns the last N settled bets for a user in a group, ordered by placedAt descending.
+ * Returns the last N settled bets for a user in a group, ordered by matchDate.
  * Only includes bets with status 'won', 'lost', 'refunded', or 'locked' (excludes 'pending').
- * Requires composite index: bets [ userId ASC, groupId ASC, placedAt DESC ]
+ * Returns most recent N bets, sorted left-to-right by match date (oldest first, newest last).
  */
 export async function getLastNBetsForUser(
   groupId: string,
@@ -258,11 +258,37 @@ export async function getLastNBetsForUser(
     )
   );
   
-  return snap.docs
+  // Get all non-pending bets
+  const bets = snap.docs
     .map((d) => ({ id: d.id, ...d.data() } as Bet))
-    .filter((bet) => bet.status !== 'pending')
-    .sort((a, b) => b.placedAt.toMillis() - a.placedAt.toMillis())
-    .slice(0, n);
+    .filter((bet) => bet.status !== 'pending');
+  
+  // Fetch match data for each bet to get matchDate
+  const betsWithMatchDate = await Promise.all(
+    bets.map(async (bet) => {
+      try {
+        const matchSnap = await getDoc(doc(db, 'matches', bet.matchId));
+        const matchData = matchSnap.exists() ? matchSnap.data() : null;
+        return {
+          ...bet,
+          matchDate: matchData ? (matchData.matchDate as TimestampType) : bet.placedAt,
+        };
+      } catch {
+        // Fallback to placedAt if match fetch fails
+        return {
+          ...bet,
+          matchDate: bet.placedAt,
+        };
+      }
+    })
+  );
+  
+  // Sort by matchDate descending (newest first) to get most recent bets
+  // Then take last N (most recent N) and reverse to ascending (oldest first, left to right)
+  return betsWithMatchDate
+    .sort((a, b) => b.matchDate.toMillis() - a.matchDate.toMillis())
+    .slice(0, n)
+    .reverse();
 }
 
 /**

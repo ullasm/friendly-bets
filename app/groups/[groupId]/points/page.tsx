@@ -337,8 +337,8 @@ function PointsContent() {
                             <span className="text-[10px] text-[var(--text-muted)]">No bets yet</span>
                           ) : (
                             <>
-                              {/* Render actual bet dots */}
-                              {[...(memberBetTrends[m.userId] || [])].reverse().map((trend, idx) => {
+                              {/* Render actual bet dots - already sorted by matchDate ascending */}
+                              {(memberBetTrends[m.userId] || []).map((trend, idx) => {
                                 const tooltipText = `${trend.matchName}: ${trend.pointsDelta && trend.pointsDelta > 0 ? '+' : ''}${trend.pointsDelta ?? 0} pts`;
                                 
                                 // Determine color based on status - matching app colors
