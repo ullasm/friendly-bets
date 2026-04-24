@@ -316,7 +316,7 @@ export function RunningTotalLedger({
                 {visibleMembers.map((member) => (
                   <th
                     key={member.userId}
-                    className="sticky top-0 z-20 py-2 px-2 text-xs font-medium text-[var(--text-primary)] bg-[#1a2235] border-b border-[var(--border)] text-center"
+                    className="sticky top-0 z-20 py-2 px-2 text-xs font-medium text-[var(--text-muted)] bg-[#1a2235] border-b border-[var(--border)] text-center"
                     style={{ minWidth: `${MEMBER_COLUMN_WIDTH}px` }}
                   >
                     {member.displayName}
@@ -354,10 +354,8 @@ export function RunningTotalLedger({
                         ) : (
                           <span className="text-xs">
                             <span className="text-[var(--text-muted)]">{formatDate(row.match!.matchDate)}</span>
-                            <span className="mx-2 text-[var(--text-muted)]">—</span>
-                            {row.match!.matchName}
-                            <span className="text-[var(--text-muted)] ml-2">
-                              — {getWinnerDisplay(row.match!)}
+                            <span className="text ml-2">{row.match!.matchName}</span>
+                            <span className="text-[var(--text-muted)] ml-2">{getWinnerDisplay(row.match!)}
                             </span>
                           </span>
                         )}
