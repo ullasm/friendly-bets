@@ -82,7 +82,7 @@ function PointsContent() {
           await Promise.all(
             updated.map(async (member) => {
               try {
-                const bets = await getLastNBetsForUser(groupId, member.userId, 7);
+                const bets = await getLastNBetsForUser(groupId, member.userId, 5);
                 const betsWithMatchNames = await Promise.all(
                   bets.map(async (bet) => {
                     try {
@@ -234,102 +234,101 @@ function PointsContent() {
           {members.length === 0 ? (
             <p className="text-[var(--text-muted)] text-sm text-center">No members yet</p>
           ) : (
-            <ol className="space-y-2">
+            <div className="space-y-0">
               {members.map((m, i) => {
                 const isMe = m.userId === user?.uid;
+                const trends = memberBetTrends[m.userId] || [];
                 return (
-                  <li
+                  <div
                     key={m.userId}
-                    className={`flex items-center justify-between py-2 px-3 rounded-lg ${
-                      isMe
-                        ? 'bg-green-500/10 border border-green-500/30'
-                        : 'bg-[var(--bg-input)]'
+                    className={`flex items-start py-3 px-3 ${
+                      i < members.length - 1
+                        ? 'border-b border-[var(--border)]'
+                        : ''
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <span className="text-[var(--text-muted)] text-sm w-5 text-right">{i + 1}</span>
+                    {/* Left column: Rank + Avatar (vertically centered) */}
+                    <div className="flex items-center gap-3 shrink-0 pt-[6px]" style={{ minWidth: '72px' }}>
+                      <span className="text-[var(--text-muted)] text-sm w-5 text-right shrink-0">{i + 1}.</span>
                       <Avatar name={m.displayName} color={m.avatarColor} size="sm" />
-                      <div className="flex flex-col pt-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-[var(--text-primary)]">{m.displayName}</span>
+                    </div>
+                    {/* Right column: Name + Badges + Points + Trending dots */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-sm text-[var(--text-primary)] truncate">{m.displayName}</span>
                           {isMe && (
-                            <span className="text-xs text-green-500 font-medium">(you)</span>
+                            <span className="text-[10px] text-green-500 font-medium shrink-0">(you)</span>
                           )}
                           {m.role === 'admin' && (
-                            <Badge variant="role-admin" shape="tag">Admin</Badge>
+                            <Badge variant="role-admin" shape="tag" className="text-[10px] leading-none px-1.5 py-0.5 shrink-0">Admin</Badge>
                           )}
                         </div>
-                        {/* Last 5 Bets Trend Indicator */}
-                        <div className="flex items-center gap-[6px] mt-2 mb-1">
-                          {(memberBetTrends[m.userId] || []).length === 0 ? (
-                            <span className="text-[10px] text-[var(--text-muted)]">No bets yet</span>
-                          ) : (
-                            <>
-                              {/* Render actual bet dots - already sorted by matchDate ascending */}
-                              {(memberBetTrends[m.userId] || []).map((trend, idx) => {
-                                const tooltipText = `${trend.matchName}: ${trend.pointsDelta && trend.pointsDelta > 0 ? '+' : ''}${trend.pointsDelta ?? 0} pts`;
-                                
-                                // Determine color based on status - matching app colors
-                                // Blue: match text-green-400 (accent color for positive)
-                                // Red: match text-red-400 (ghost-danger color)
-                                let bgColor = 'rgba(100, 116, 139, 0.6)'; // default gray for refunded
-                                if (trend.status === 'won') bgColor = 'var(--accent-text, #5DADE2)'; // blue accent
-                                else if (trend.status === 'lost') bgColor = 'rgba(248, 113, 113, 0.8)'; // red-400 equivalent
-                                else if (trend.status === 'locked') bgColor = 'rgba(245, 158, 11, 0.8)'; // amber
-                                
-                                return (
-                                  <div
-                                    key={idx}
-                                    className="bet-trend-dot"
-                                    data-status={trend.status}
-                                    title={tooltipText}
-                                    style={{
-                                      width: '14px',
-                                      height: '14px',
-                                      borderRadius: '50%',
-                                      backgroundColor: bgColor,
-                                      flexShrink: 0,
-                                      opacity: 0.8,
-                                      transition: 'opacity 0.15s ease, transform 0.15s ease',
-                                      cursor: 'help',
-                                    }}
-                                    onMouseEnter={(e) => {
-                                      e.currentTarget.style.opacity = '1';
-                                      e.currentTarget.style.transform = 'scale(1.2)';
-                                    }}
-                                    onMouseLeave={(e) => {
-                                      e.currentTarget.style.opacity = '0.8';
-                                      e.currentTarget.style.transform = 'scale(1)';
-                                    }}
-                                  />
-                                );
-                              })}
-                              {/* Ghost dots for remaining slots to maintain consistent width */}
-                              {Array.from({ length: 7 - (memberBetTrends[m.userId] || []).length }).map((_, idx) => (
+                        <span className="text-sm font-medium text-green-400 shrink-0 ml-2">
+                          {m.totalPoints} pts
+                        </span>
+                      </div>
+                      {/* Trending dots */}
+                      <div className="flex items-center gap-[6px] mt-2">
+                        {trends.length === 0 ? (
+                          <span className="text-[10px] text-[var(--text-muted)]">No bets yet</span>
+                        ) : (
+                          <>
+                            {trends.map((trend, idx) => {
+                              const tooltipText = `${trend.matchName}: ${trend.pointsDelta && trend.pointsDelta > 0 ? '+' : ''}${trend.pointsDelta ?? 0} pts`;
+                              let bgColor = 'rgba(100, 116, 139, 0.6)';
+                              if (trend.status === 'won') bgColor = 'var(--accent-text, #5DADE2)';
+                              else if (trend.status === 'lost') bgColor = 'rgba(248, 113, 113, 0.8)';
+                              else if (trend.status === 'locked') bgColor = 'rgba(245, 158, 11, 0.8)';
+                              return (
                                 <div
-                                  key={`ghost-${idx}`}
+                                  key={idx}
+                                  className="bet-trend-dot"
+                                  data-status={trend.status}
+                                  title={tooltipText}
                                   style={{
-                                    width: '14px',
-                                    height: '14px',
+                                    width: '12px',
+                                    height: '12px',
                                     borderRadius: '50%',
-                                    border: '1px solid rgba(255, 255, 255, 0.1)',
-                                    backgroundColor: 'transparent',
+                                    backgroundColor: bgColor,
                                     flexShrink: 0,
+                                    opacity: 0.85,
+                                    transition: 'opacity 0.15s ease, transform 0.15s ease',
+                                    cursor: 'help',
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.opacity = '1';
+                                    e.currentTarget.style.transform = 'scale(1.3)';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.opacity = '0.85';
+                                    e.currentTarget.style.transform = 'scale(1)';
                                   }}
                                 />
-                              ))}
-                            </>
-                          )}
-                        </div>
+                              );
+                            })}
+                            {/* Ghost dots for remaining slots */}
+                            {Array.from({ length: 5 - trends.length }).map((_, idx) => (
+                              <div
+                                key={`ghost-${idx}`}
+                                style={{
+                                  width: '12px',
+                                  height: '12px',
+                                  borderRadius: '50%',
+                                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                                  backgroundColor: 'transparent',
+                                  flexShrink: 0,
+                                }}
+                              />
+                            ))}
+                          </>
+                        )}
                       </div>
                     </div>
-                    <span className="text-sm font-semibold text-green-400">
-                      {m.totalPoints} pts
-                    </span>
-                  </li>
+                  </div>
                 );
               })}
-            </ol>
+            </div>
           )}
         </Card>
 

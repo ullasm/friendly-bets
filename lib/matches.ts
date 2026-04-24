@@ -382,9 +382,9 @@ export async function declareMatchResult(
   result: 'team_a' | 'team_b' | 'draw' | 'abandoned',
   noDrawPolicy: Match['noDrawPolicy']
 ): Promise<import('./settleMatch').SettlementSummary> {
-  if (process.env.ALLOW_MANAGE_MATCHES !== 'true') {
-    throw new Error('Match management is disabled');
-  }
+  // if (process.env.ALLOW_MANAGE_MATCHES !== 'true') {
+  //   throw new Error('Match management is disabled');
+  // }
   return declareMatchResultEngine(matchId, groupId, result, noDrawPolicy);
 }
 
