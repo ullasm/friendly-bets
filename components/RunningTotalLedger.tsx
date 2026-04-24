@@ -79,7 +79,7 @@ function MemberFilterPill({
       onClick={onClick}
       className={`px-3 py-1.5 text-xs font-medium rounded-full transition-colors ${
         active
-          ? 'bg-blue-600 text-white'
+          ? 'bg-[var(--accent-solid)] text-white'
           : 'bg-[var(--bg-input)] text-[var(--text-muted)] hover:text-[var(--text-primary)] border border-[var(--border)]'
       }`}
     >
@@ -320,9 +320,6 @@ export function RunningTotalLedger({
                     style={{ minWidth: `${MEMBER_COLUMN_WIDTH}px` }}
                   >
                     {member.displayName}
-                    <span className="text-[var(--text-muted)] font-normal ml-1">
-                      ({memberBetCounts[member.userId] ?? 0})
-                    </span>
                   </th>
                 ))}
               </tr>
